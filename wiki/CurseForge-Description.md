@@ -1,7 +1,7 @@
 # M33kAuraUtils — CurseForge Listing Content
 
 ## 1. Project Summary (For CurseForge "Summary" Field)
-> Seamlessly creates WeakAuras and M33kAuras triggers for buffs and cooldowns tracked by the Blizzard Cooldown Manager in World of Warcraft: Midnight.
+> Seamlessly injects Blizzard Cooldown Manager tracking options directly into M33kAuras and WeakAuras UI—no chat commands required.
 
 ---
 
@@ -10,48 +10,43 @@
 ```markdown
 # M33kAuraUtils
 
-**M33kAuraUtils** is a lightweight combat and aura utility for World of Warcraft (Retail & Midnight) designed to bridge custom auras with the native **Blizzard Cooldown Manager**.
+**M33kAuraUtils** is a seamless combat and trigger extension for World of Warcraft (Retail & Midnight) that bridges custom auras directly with the native **Blizzard Cooldown Manager**.
 
-With the evolving API and cooldown architecture in *Midnight*, tracking player abilities, buffs, and rotational cooldowns directly through standard triggers can often result in desynchronization or missing aura states. **M33kAuraUtils** solves this by hooking into the Blizzard Cooldown Manager pipeline, providing enhanced aura trigger options and synchronization for **M33kAuras**, **ThisWeeksAuras**, and **WeakAuras**.
+**Zero Chat Commands. 100% Native GUI Integration.**
+
+Instead of relying on awkward slash commands or manual macros, **M33kAuraUtils** hooks directly into the **M33kAuras**, **ThisWeeksAuras**, and **WeakAuras** configuration panels. When creating or editing a trigger for player buffs or cooldowns, new Blizzard Cooldown Manager options appear natively inside the aura editor interface.
 
 ---
 
 ### ✨ Key Features
 
-* **Blizzard Cooldown Manager Integration:** Directly interfaces with Blizzard's native cooldown and buff management systems to ensure precise, authoritative timer and state data.
-* **M33kAuras & WeakAuras Synergy:** Seamlessly integrates into your existing aura framework, injecting optimized trigger options for player buffs, charges, and cooldowns.
-* **Midnight Ready:** Built from the ground up for *World of Warcraft: Midnight* (12.0+) and modern retail API standards.
-* **Accurate Buff & State Tracking:** Solves complex aura tracking edge cases where standard unit auras fail to reflect active combat states or cooldown resets.
-* **Zero Dependency Overhead:** High-performance, pure Lua implementation with zero bloat or third-party framework overhead.
+* **100% In-GUI Trigger Integration:** Seamlessly injects options directly into the **M33kAuras** and **WeakAuras** Trigger Options panel. Configure everything with intuitive dropdowns and toggles right where you build your auras.
+* **Blizzard Cooldown Manager Synchronization:** Interfaces with Blizzard's native cooldown and buff management engine in *Midnight* (12.0+) and modern Retail, eliminating aura desynchronization and dropped buff states.
+* **No Slash Commands Required:** Fully graphical workflow. Set it up visually in the aura options window just like any built-in trigger type.
+* **Dual-State Cooldown & Aura Awareness:** Accurately tracks active durations, charges, and state changes even when standard unit auras fail to register.
+* **Zero Performance Overhead:** Lightweight, pure native Lua architecture with zero external library bloat.
 
 ---
 
-### ⚙️ How It Works
+### 🖥️ How It Works in the UI
 
-1. **Automatic Cooldown Hooking:** M33kAuraUtils monitors the Blizzard Cooldown Manager events and synchronizes state updates in real time.
-2. **Enhanced Trigger Options:** When configuring auras in M33kAuras or WeakAuras, M33kAuraUtils provides direct selector options to track buffs and cooldowns through the Blizzard Cooldown Manager pipeline.
-3. **Instant Visual Feedback:** Custom auras reflect exact expiration times, charges, and active states with zero desync.
-
----
-
-### ⌨️ Slash Commands & Configuration
-
-* `/m33k` — Display addon status and available utility commands.
-* `/m33k reset` — Reset configuration settings to default.
-* `/m33k toggle` — Toggle debug and diagnostic monitoring mode.
+1. Open your aura editor (`/wa` or `/m33kauras`).
+2. Select your Aura $\rightarrow$ Navigate to the **Trigger** tab.
+3. Under your Player Buff or Cooldown trigger, you will find the new **Blizzard Cooldown Manager / M33kAuraUtils** selector options injected directly into the settings.
+4. Toggle or configure your tracking mode—your aura now binds directly to Blizzard's authoritative cooldown pipeline!
 
 ---
 
 ### 📦 Installation
 
 1. Install via the **CurseForge App** (recommended) or extract into your `World of Warcraft\_retail_\Interface\AddOns\` directory.
-2. Ensure both **`M33kAuraUtils`** and your aura framework (**`M33kAuras`** or **`WeakAuras`**) are enabled in your AddOn list.
-3. Log into the game—M33kAuraUtils will automatically hook into the Cooldown Manager.
+2. Ensure both **`M33kAuraUtils`** and your aura framework (**`M33kAuras`** or **`WeakAuras`**) are enabled.
+3. Open your aura options in-game—all new controls appear automatically in the UI.
 
 ---
 
 ### 🔗 Links & Community
 
 * **Source Code:** [GitHub Repository](https://github.com/knoxy5467/M33kAuraUtils)
-* **Bug Reports & Feedback:** [GitHub Issues](https://github.com/knoxy5467/M33kAuraUtils/issues)
+* **Bug Reports & Feature Requests:** [GitHub Issues](https://github.com/knoxy5467/M33kAuraUtils/issues)
 ```
