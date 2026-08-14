@@ -1,4 +1,6 @@
 local AddonName, GAT = ...
+GAT = GAT or _G.GroundAuraTracker or {}
+_G.GroundAuraTracker = GAT
 
 GAT.Engine = {}
 local Engine = GAT.Engine

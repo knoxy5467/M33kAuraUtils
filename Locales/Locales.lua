@@ -1,4 +1,6 @@
 local AddonName, GAT = ...
+GAT = GAT or _G.GroundAuraTracker or {}
+_G.GroundAuraTracker = GAT
 
 GAT.L = setmetatable({}, {
     __index = function(t, k)

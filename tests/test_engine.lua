@@ -1,17 +1,9 @@
 local Harness = require("tests.test_harness")
 Harness.SetupEnvironment()
 
--- Load Addon Modules
+-- Initialize Addon State
 local GAT = {}
-local AddonName = "GroundAuraTracker"
-
--- Execute Module Files
-local function LoadAddon()
-    dofile("Locales/Locales.lua")
-    dofile("Spells.lua")
-    dofile("Database.lua")
-    dofile("Engine.lua")
-end
+Harness.LoadFullAddon(GAT)
 
 Harness.BeginSuite("Dual-State Tracking Engine Tests")
 

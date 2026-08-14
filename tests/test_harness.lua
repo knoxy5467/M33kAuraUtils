@@ -53,6 +53,7 @@ end
 
 -- Global WoW Environment Setup
 function Harness.SetupEnvironment()
+    _G.GroundAuraTracker = _G.GroundAuraTracker or {}
     _G.GetTime = Harness.GetTime
     _G.UnitGUID = function(unit) if unit == "player" then return mockPlayerGUID end return nil end
     _G.UnitClass = function(unit) if unit == "player" then return "Paladin", mockPlayerClass end return nil end
@@ -85,6 +86,7 @@ function Harness.SetupEnvironment()
     end
 
     _G.UIParent = {}
+    _G.SlashCmdList = {}
 
     -- Mock Frame creation
     _G.CreateFrame = function(frameType, name, parent)
@@ -157,6 +159,26 @@ function Harness.SetupEnvironment()
     end
 end
 
+function Harness.LoadAddonFile(filePath, GAT)
+    GAT = GAT or _G.GroundAuraTracker
+    local chunk, err = loadfile(filePath)
+    if not chunk then
+        error(string.format("Failed to load %s: %s", filePath, tostring(err)))
+    end
+    return chunk("GroundAuraTracker", GAT)
+end
+
+function Harness.LoadFullAddon(GAT)
+    GAT = GAT or _G.GroundAuraTracker
+    Harness.LoadAddonFile("Locales/Locales.lua", GAT)
+    Harness.LoadAddonFile("Spells.lua", GAT)
+    Harness.LoadAddonFile("Database.lua", GAT)
+    Harness.LoadAddonFile("Engine.lua", GAT)
+    Harness.LoadAddonFile("UI.lua", GAT)
+    Harness.LoadAddonFile("Options.lua", GAT)
+    return GAT
+end
+
 -- Test Assertions & Runner
 local passedTests = 0
 local failedTests = 0
@@ -172,8 +194,8 @@ function Harness.Assert(condition, message)
         passedTests = passedTests + 1
     else
         failedTests = failedTests + 1
-        print(string.format("  [FAIL] %s: %s", suiteName, message or "Assertion failed"))
-        error(message or "Assertion failed", 2)
+        local msg = string.format("%s: %s", suiteName, message or "Assertion failed")
+        error(msg, 2)
     end
 end
 
@@ -183,7 +205,6 @@ function Harness.AssertEquals(actual, expected, message)
     else
         failedTests = failedTests + 1
         local msg = string.format("%s (Expected %s, got %s)", message or "Values not equal", tostring(expected), tostring(actual))
-        print(string.format("  [FAIL] %s: %s", suiteName, msg))
         error(msg, 2)
     end
 end

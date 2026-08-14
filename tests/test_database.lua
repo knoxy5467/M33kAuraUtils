@@ -3,11 +3,7 @@ Harness.SetupEnvironment()
 
 -- Load modules
 local GAT = {}
-local AddonName = "GroundAuraTracker"
-
-dofile("Locales/Locales.lua")
-dofile("Spells.lua")
-dofile("Database.lua")
+Harness.LoadFullAddon(GAT)
 
 Harness.BeginSuite("Database & Configuration Tests")
 
@@ -15,8 +11,7 @@ Harness.RunTest("1. Database initializes with default values", function()
     _G.GroundAuraTrackerDB = nil
     local db = GAT.Database.Initialize()
 
-    Harness.AssertNotNil = function(val, msg) Harness.Assert(val ~= nil, msg) end
-    Harness.AssertNotNil(db, "DB should not be nil")
+    Harness.Assert(db ~= nil, "DB should not be nil")
     Harness.AssertEquals(db.size, 50, "Default size should be 50")
     Harness.AssertEquals(db.locked, false, "Default locked state should be false")
     Harness.AssertEquals(db.colors.inside.r, 0.2, "Default inside color R should be 0.2")

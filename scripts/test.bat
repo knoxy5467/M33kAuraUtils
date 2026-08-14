@@ -14,7 +14,11 @@ if %ERRORLEVEL% equ 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo [ERROR] Lua or LuaJIT executable not found in PATH.
-echo Running tests using PowerShell fallback runner...
-powershell -ExecutionPolicy Bypass -File scripts\test.ps1
-exit /b %ERRORLEVEL%
+where python >nul 2>nul
+if %ERRORLEVEL% equ 0 (
+    python scripts\run_tests.py
+    exit /b %ERRORLEVEL%
+)
+
+echo [ERROR] No Lua or Python interpreter found in PATH.
+exit /b 1
