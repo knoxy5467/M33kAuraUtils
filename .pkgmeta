@@ -1,4 +1,4 @@
-package-as: GroundAuraTracker
+package-as: M33kAuraUtils
 enable-nolib-creation: false
 
 ignore:

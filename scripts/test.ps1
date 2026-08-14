@@ -1,4 +1,4 @@
-# scripts/test.ps1: Native Lua Test Runner
+# scripts/test.ps1: Native Lua Test Runner for M33kAuraUtils
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir

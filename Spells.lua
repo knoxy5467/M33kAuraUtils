@@ -1,9 +1,9 @@
-local AddonName, GAT = ...
-GAT = GAT or _G.GroundAuraTracker or {}
-_G.GroundAuraTracker = GAT
+local AddonName, M33K = ...
+M33K = M33K or _G.M33kAuraUtils or {}
+_G.M33kAuraUtils = M33K
 
-GAT.Spells = {}
-local Spells = GAT.Spells
+M33K.Spells = {}
+local Spells = M33K.Spells
 
 -- Built-in ground / in-zone spell definitions
 Spells.DefaultDatabase = {

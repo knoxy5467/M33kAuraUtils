@@ -1,9 +1,9 @@
-local AddonName, GAT = ...
-GAT = GAT or _G.GroundAuraTracker or {}
-_G.GroundAuraTracker = GAT
+local AddonName, M33K = ...
+M33K = M33K or _G.M33kAuraUtils or {}
+_G.M33kAuraUtils = M33K
 
-GAT.UI = {}
-local UI = GAT.UI
+M33K.UI = {}
+local UI = M33K.UI
 
 local mainFrame = nil
 local iconTexture = nil
@@ -15,11 +15,11 @@ local dragOverlay = nil
 function UI.CreateMainFrame()
     if mainFrame then return mainFrame end
 
-    local db = GAT.db or GAT.Database.DefaultSettings.profile
+    local db = M33K.db or M33K.Database.DefaultSettings.profile
     local size = db.size or 50
 
     -- Main Container
-    mainFrame = CreateFrame("Frame", "GroundAuraTrackerMainFrame", UIParent)
+    mainFrame = CreateFrame("Frame", "M33kAuraUtilsMainFrame", UIParent)
     mainFrame:SetSize(size, size)
     mainFrame:SetPoint(db.point or "CENTER", UIParent, db.point or "CENTER", db.posX or 0, db.posY or -150)
     mainFrame:SetMovable(true)
@@ -28,7 +28,7 @@ function UI.CreateMainFrame()
 
     -- Drag Handlers
     mainFrame:SetScript("OnDragStart", function(self)
-        if not (GAT.db and GAT.db.locked) then
+        if not (M33K.db and M33K.db.locked) then
             self:StartMoving()
         end
     end)
@@ -36,10 +36,10 @@ function UI.CreateMainFrame()
     mainFrame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local point, _, _, posX, posY = self:GetPoint()
-        if GAT.db then
-            GAT.db.point = point
-            GAT.db.posX = posX
-            GAT.db.posY = posY
+        if M33K.db then
+            M33K.db.point = point
+            M33K.db.posX = posX
+            M33K.db.posY = posY
         end
     end)
 
@@ -75,39 +75,38 @@ function UI.CreateMainFrame()
     end)
 
     -- Subscribe to Engine callbacks
-    GAT.Engine.RegisterCallback("UI_Update", function(state, remaining, duration, spellData)
+    M33K.Engine.RegisterCallback("UI_Update", function(state, remaining, duration, spellData)
         UI.UpdateVisuals(state, remaining, duration, spellData)
     end)
 
-    UI.UpdateVisuals(GAT.Engine.STATE_EXPIRED, 0, 0, nil)
+    UI.UpdateVisuals(M33K.Engine.STATE_EXPIRED, 0, 0, nil)
     return mainFrame
 end
 
 function UI.UpdateVisuals(state, remaining, duration, spellData)
     if not mainFrame then return end
-    local db = GAT.db or GAT.Database.DefaultSettings.profile
-    local colors = db.colors or GAT.Database.DefaultSettings.profile.colors
-
+    local db = M33K.db or M33K.Database.DefaultSettings.profile
+    local colors = db.colors or M33K.Database.DefaultSettings.profile.colors
     if spellData and spellData.icon then
         iconTexture:SetTexture(spellData.icon)
     end
 
-    if state == GAT.Engine.STATE_ACTIVE_INSIDE then
+    if state == M33K.Engine.STATE_ACTIVE_INSIDE then
         mainFrame:SetAlpha(1.0)
         local c = colors.inside
         iconTexture:SetVertexColor(c.r, c.g, c.b, c.a)
         statusBar:SetStatusBarColor(c.r, c.g, c.b, c.a)
         timerText:SetTextColor(c.r, c.g, c.b, 1)
-        statusText:SetText(GAT.L["INSIDE_ZONE"])
+        statusText:SetText(M33K.L["INSIDE_ZONE"])
         statusText:SetTextColor(c.r, c.g, c.b, 1)
 
-    elseif state == GAT.Engine.STATE_ACTIVE_OUTSIDE then
+    elseif state == M33K.Engine.STATE_ACTIVE_OUTSIDE then
         mainFrame:SetAlpha(1.0)
         local c = colors.outside
         iconTexture:SetVertexColor(c.r, c.g, c.b, c.a)
         statusBar:SetStatusBarColor(c.r, c.g, c.b, c.a)
         timerText:SetTextColor(c.r, c.g, c.b, 1)
-        statusText:SetText(GAT.L["OUTSIDE_ZONE"])
+        statusText:SetText(M33K.L["OUTSIDE_ZONE"])
         statusText:SetTextColor(c.r, c.g, c.b, 1)
 
     else
@@ -126,35 +125,36 @@ function UI.UpdateVisuals(state, remaining, duration, spellData)
 end
 
 function UI.OnUpdate()
-    local state, remaining, duration, spellData = GAT.Engine.GetActiveState()
+    local state, remaining, duration, spellData = M33K.Engine.GetActiveState()
     if remaining > 0 and duration > 0 then
         timerText:SetText(string.format("%.1f", remaining))
         statusBar:SetValue(remaining / duration)
-    elseif state == GAT.Engine.STATE_EXPIRED then
+    elseif state == M33K.Engine.STATE_EXPIRED then
         timerText:SetText("")
         statusBar:SetValue(0)
     end
 end
 
 function UI.SetLocked(locked)
-    if GAT.db then
-        GAT.db.locked = locked
+    if M33K.db then
+        M33K.db.locked = locked
     end
     if mainFrame then
         mainFrame:EnableMouse(not locked)
         if locked then
-            print(GAT.L["FRAME_LOCKED"])
+            print(M33K.L["FRAME_LOCKED"])
         else
-            print(GAT.L["FRAME_UNLOCKED"])
+            print(M33K.L["FRAME_UNLOCKED"])
         end
     end
 end
 
 function UI.ResetPosition()
-    GAT.Database.ResetPosition()
-    if mainFrame and GAT.db then
+    M33K.Database.ResetPosition()
+    if mainFrame and M33K.db then
         mainFrame:ClearAllPoints()
-        mainFrame:SetPoint(GAT.db.point, UIParent, GAT.db.point, GAT.db.posX, GAT.db.posY)
-        print(GAT.L["FRAME_RESET"])
+        mainFrame:SetPoint(M33K.db.point, UIParent, M33K.db.point, M33K.db.posX, M33K.db.posY)
+        print(M33K.L["FRAME_RESET"])
     end
 end
+

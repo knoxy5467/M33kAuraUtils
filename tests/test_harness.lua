@@ -53,7 +53,8 @@ end
 
 -- Global WoW Environment Setup
 function Harness.SetupEnvironment()
-    _G.GroundAuraTracker = _G.GroundAuraTracker or {}
+    _G.M33kAuraUtils = _G.M33kAuraUtils or {}
+    _G.M33K = _G.M33K or {}
     _G.GetTime = Harness.GetTime
     _G.UnitGUID = function(unit) if unit == "player" then return mockPlayerGUID end return nil end
     _G.UnitClass = function(unit) if unit == "player" then return "Paladin", mockPlayerClass end return nil end
@@ -87,8 +88,9 @@ function Harness.SetupEnvironment()
 
     _G.UIParent = { _name = "UIParent" }
     _G.SlashCmdList = {}
-    _G.SLASH_GROUNDAURATRACKER1 = "/gat"
-    _G.SLASH_GROUNDAURATRACKER2 = "/groundaura"
+    _G.SLASH_M33KAURAUTILS1 = "/m33k"
+    _G.SLASH_M33KAURAUTILS2 = "/m33kaura"
+    _G.SLASH_M33KAURAUTILS3 = "/m33kaurautils"
 
     -- Mock Frame creation
     _G.CreateFrame = function(frameType, name, parent)
@@ -277,24 +279,24 @@ function Harness.SetupMockThisWeeksAuras()
     return mockTWA, mockPrivate
 end
 
-function Harness.LoadAddonFile(filePath, GAT)
-    GAT = GAT or _G.GroundAuraTracker
+function Harness.LoadAddonFile(filePath, M33K)
+    M33K = M33K or _G.M33kAuraUtils or _G.M33K or {}
     local chunk, err = loadfile(filePath)
     if not chunk then
         error(string.format("Failed to load %s: %s", filePath, tostring(err)))
     end
-    return chunk("GroundAuraTracker", GAT)
+    return chunk("M33kAuraUtils", M33K)
 end
 
-function Harness.LoadFullAddon(GAT)
-    GAT = GAT or _G.GroundAuraTracker
-    Harness.LoadAddonFile("Locales/Locales.lua", GAT)
-    Harness.LoadAddonFile("Spells.lua", GAT)
-    Harness.LoadAddonFile("Database.lua", GAT)
-    Harness.LoadAddonFile("Engine.lua", GAT)
-    Harness.LoadAddonFile("UI.lua", GAT)
-    Harness.LoadAddonFile("Options.lua", GAT)
-    return GAT
+function Harness.LoadFullAddon(M33K)
+    M33K = M33K or _G.M33kAuraUtils or _G.M33K or {}
+    Harness.LoadAddonFile("Locales/Locales.lua", M33K)
+    Harness.LoadAddonFile("Spells.lua", M33K)
+    Harness.LoadAddonFile("Database.lua", M33K)
+    Harness.LoadAddonFile("Engine.lua", M33K)
+    Harness.LoadAddonFile("UI.lua", M33K)
+    Harness.LoadAddonFile("Options.lua", M33K)
+    return M33K
 end
 
 -- Test Assertions & Runner

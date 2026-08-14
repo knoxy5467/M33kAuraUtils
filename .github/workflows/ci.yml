@@ -1,4 +1,4 @@
-name: CI & Secret Testing
+name: M33kAuraUtils CI & Secret Testing
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   unit-tests:
-    name: Run Unit Tests & Syntax Check
+    name: Run M33kAuraUtils Unit Tests & Syntax Check
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -30,7 +30,7 @@ jobs:
           lua scripts/run_tests.lua
 
   secret-access-verification:
-    name: Secret Access & Masking Verification
+    name: M33kAuraUtils Secret Access & Masking Verification
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code

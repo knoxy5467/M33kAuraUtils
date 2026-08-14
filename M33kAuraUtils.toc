@@ -1,9 +1,9 @@
 ## Interface: 120100
-## Title: GroundAuraTracker
-## Notes: Smart ground zone and player in-zone aura tracker for Consecration, Death & Decay, Efflorescence, and more.
-## Author: GroundAuraTracker Team
+## Title: M33kAuraUtils
+## Notes: Smart ground zone and aura tracking utility for World of Warcraft.
+## Author: M33kAuraUtils Team
 ## Version: @project-version@
-## SavedVariables: GroundAuraTrackerDB
+## SavedVariables: M33kAuraUtilsDB
 ## OptionalDeps: ThisWeeksAuras, WeakAuras
 ## IconTexture: Interface\Icons\Spell_Holy_InnerFire
 ## X-Category: Combat

@@ -1,9 +1,9 @@
-local AddonName, GAT = ...
-GAT = GAT or _G.GroundAuraTracker or {}
-_G.GroundAuraTracker = GAT
+local AddonName, M33K = ...
+M33K = M33K or _G.M33kAuraUtils or {}
+_G.M33kAuraUtils = M33K
 
-GAT.Injection = {}
-local Injection = GAT.Injection
+M33K.Injection = {}
+local Injection = M33K.Injection
 
 local hookedAuras = {}
 
@@ -77,7 +77,7 @@ function Injection.SyncAuraState(auraId, triggernum, spellId, duration)
     local allStates = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)
     if not allStates then return end
 
-    local state, remaining, dur, spellData = GAT.Engine.GetActiveState()
+    local state, remaining, dur, spellData = M33K.Engine.GetActiveState()
 
     allStates[""] = {
         show = remaining > 0,
@@ -85,7 +85,7 @@ function Injection.SyncAuraState(auraId, triggernum, spellId, duration)
         progressType = "timed",
         duration = duration or dur or 12,
         expirationTime = (GetTime and GetTime() or 0) + remaining,
-        inside = (state == GAT.Engine.STATE_ACTIVE_INSIDE),
+        inside = (state == M33K.Engine.STATE_ACTIVE_INSIDE),
         name = spellData and spellData.name or "",
         icon = spellData and spellData.icon or 135926,
     }
@@ -116,7 +116,7 @@ function Injection.Initialize()
     end
 
     -- Hook runtime engine updates
-    GAT.Engine.RegisterCallback("ThisWeeksAuras_Sync", function(state, remaining, duration, spellData)
+    M33K.Engine.RegisterCallback("ThisWeeksAuras_Sync", function(state, remaining, duration, spellData)
         for auraId, info in pairs(hookedAuras) do
             Injection.SyncAuraState(auraId, info.triggernum, info.spellId, info.duration)
         end
@@ -136,3 +136,4 @@ end
 function Injection.UnregisterHookedAura(auraId)
     hookedAuras[auraId] = nil
 end
+

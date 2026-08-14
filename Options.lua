@@ -1,9 +1,9 @@
-local AddonName, GAT = ...
-GAT = GAT or _G.GroundAuraTracker or {}
-_G.GroundAuraTracker = GAT
+local AddonName, M33K = ...
+M33K = M33K or _G.M33kAuraUtils or {}
+_G.M33kAuraUtils = M33K
 
-GAT.Options = {}
-local Options = GAT.Options
+M33K.Options = {}
+local Options = M33K.Options
 
 function Options.HandleSlashCommand(msg)
     local args = {}
@@ -14,18 +14,18 @@ function Options.HandleSlashCommand(msg)
     local cmd = args[1] or "help"
 
     if cmd == "lock" then
-        local isLocked = GAT.db and GAT.db.locked
-        GAT.UI.SetLocked(not isLocked)
+        local isLocked = M33K.db and M33K.db.locked
+        M33K.UI.SetLocked(not isLocked)
 
     elseif cmd == "reset" then
-        GAT.UI.ResetPosition()
+        M33K.UI.ResetPosition()
 
     elseif cmd == "toggle" then
-        if GroundAuraTrackerMainFrame then
-            if GroundAuraTrackerMainFrame:IsShown() then
-                GroundAuraTrackerMainFrame:Hide()
+        if M33kAuraUtilsMainFrame then
+            if M33kAuraUtilsMainFrame:IsShown() then
+                M33kAuraUtilsMainFrame:Hide()
             else
-                GroundAuraTrackerMainFrame:Show()
+                M33kAuraUtilsMainFrame:Show()
             end
         end
 
@@ -34,23 +34,25 @@ function Options.HandleSlashCommand(msg)
         local buffId = tonumber(args[3])
         local duration = tonumber(args[4]) or 10
         if castId and buffId then
-            GAT.Database.AddCustomSpell(castId, buffId, duration)
-            print(string.format("GroundAuraTracker: Added custom spell CastID=%d, BuffID=%d, Duration=%ds", castId, buffId, duration))
+            M33K.Database.AddCustomSpell(castId, buffId, duration)
+            print(string.format("M33kAuraUtils: Added custom spell CastID=%d, BuffID=%d, Duration=%ds", castId, buffId, duration))
         end
 
     else
-        print("|cFF00FF00" .. GAT.L["SLASH_HELP_HEADER"] .. "|r")
-        print(GAT.L["SLASH_HELP_LOCK"])
-        print(GAT.L["SLASH_HELP_RESET"])
-        print(GAT.L["SLASH_HELP_TOGGLE"])
-        print("  /gat add <castSpellId> <buffSpellId> [duration] - Add custom ground spell")
+        print("|cFF00FF00" .. M33K.L["SLASH_HELP_HEADER"] .. "|r")
+        print(M33K.L["SLASH_HELP_LOCK"])
+        print(M33K.L["SLASH_HELP_RESET"])
+        print(M33K.L["SLASH_HELP_TOGGLE"])
+        print("  /m33k add <castSpellId> <buffSpellId> [duration] - Add custom ground spell")
     end
 end
 
 function Options.Initialize()
-    SLASH_GROUNDAURATRACKER1 = "/gat"
-    SLASH_GROUNDAURATRACKER2 = "/groundaura"
-    SlashCmdList["GROUNDAURATRACKER"] = function(msg)
+    SLASH_M33KAURAUTILS1 = "/m33k"
+    SLASH_M33KAURAUTILS2 = "/m33kaura"
+    SLASH_M33KAURAUTILS3 = "/m33kaurautils"
+    SlashCmdList["M33KAURAUTILS"] = function(msg)
         Options.HandleSlashCommand(msg)
     end
 end
+

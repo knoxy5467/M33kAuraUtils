@@ -56,7 +56,7 @@ function Deployer.Deploy(customPath)
     -- Normalize target path
     targetBase = string.gsub(targetBase, "\\", "/")
     targetBase = string.gsub(targetBase, "/$", "")
-    local targetAddonDir = targetBase .. "/GroundAuraTracker"
+    local targetAddonDir = targetBase .. "/M33kAuraUtils"
 
     print(string.format("  -> Target WoW AddOns Path: %s", targetAddonDir))
 
@@ -67,7 +67,7 @@ function Deployer.Deploy(customPath)
 
     -- List of distribution files
     local distFiles = {
-        { src = "GroundAuraTracker.toc", dst = targetAddonDir .. "/GroundAuraTracker.toc" },
+        { src = "M33kAuraUtils.toc", dst = targetAddonDir .. "/M33kAuraUtils.toc" },
         { src = "Locales/Locales.lua", dst = targetAddonDir .. "/Locales/Locales.lua" },
         { src = "Spells.lua", dst = targetAddonDir .. "/Spells.lua" },
         { src = "Database.lua", dst = targetAddonDir .. "/Database.lua" },

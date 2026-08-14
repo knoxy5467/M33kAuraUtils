@@ -2,7 +2,7 @@
 package.path = package.path .. ";./?.lua;./tests/?.lua;./Locales/?.lua;./scripts/?.lua"
 
 print("==========================================================")
-print("       GroundAuraTracker Local Build & Test Runner        ")
+print("       M33kAuraUtils Local Build & Test Runner        ")
 print("==========================================================")
 
 local totalPassed = 0
@@ -10,9 +10,9 @@ local totalFailed = 0
 
 -- 1. Validate TOC References
 print("\n[STEP 1/4] Validating TOC File & Asset References...")
-local tocFile = io.open("GroundAuraTracker.toc", "r")
+local tocFile = io.open("M33kAuraUtils.toc", "r")
 if not tocFile then
-    print("  [FAIL] GroundAuraTracker.toc not found!")
+    print("  [FAIL] M33kAuraUtils.toc not found!")
     os.exit(1)
 else
     local referencedFiles = {}

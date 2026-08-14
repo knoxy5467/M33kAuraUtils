@@ -2,12 +2,12 @@ local Harness = require("tests.test_harness")
 Harness.SetupEnvironment()
 
 -- Initialize fresh addon state
-_G.GroundAuraTrackerDB = nil
-local GAT = {}
-Harness.LoadFullAddon(GAT)
-GAT.Database.Initialize()
-GAT.Engine.Initialize()
-local mainFrame = GAT.UI.CreateMainFrame()
+_G.M33kAuraUtilsDB = nil
+local M33K = {}
+Harness.LoadFullAddon(M33K)
+M33K.Database.Initialize()
+M33K.Engine.Initialize()
+local mainFrame = M33K.UI.CreateMainFrame()
 
 Harness.BeginSuite("UI Components & Visual Handlers Tests")
 
@@ -21,14 +21,14 @@ end)
 
 Harness.RunTest("2. UI.UpdateVisuals applies INSIDE (Green) styling", function()
     local spellData = { name = "Consecration", icon = 135926 }
-    GAT.UI.UpdateVisuals(GAT.Engine.STATE_ACTIVE_INSIDE, 10.0, 12.0, spellData)
+    M33K.UI.UpdateVisuals(M33K.Engine.STATE_ACTIVE_INSIDE, 10.0, 12.0, spellData)
 
     Harness.AssertEquals(mainFrame:GetAlpha(), 1.0, "Active frame alpha should be 1.0")
 
     -- Inspect font strings and textures
     local statusFS = mainFrame._fontStrings[2]
     Harness.Assert(statusFS ~= nil, "Status font string should exist")
-    Harness.AssertEquals(statusFS:GetText(), GAT.L["INSIDE_ZONE"], "Status text should be INSIDE")
+    Harness.AssertEquals(statusFS:GetText(), M33K.L["INSIDE_ZONE"], "Status text should be INSIDE")
 
     local r, g, b, a = statusFS:GetTextColor()
     Harness.AssertEquals(r, 0.2, "Inside text color R should be 0.2")
@@ -37,12 +37,12 @@ end)
 
 Harness.RunTest("3. UI.UpdateVisuals applies OUTSIDE (Red Alert) styling", function()
     local spellData = { name = "Consecration", icon = 135926 }
-    GAT.UI.UpdateVisuals(GAT.Engine.STATE_ACTIVE_OUTSIDE, 7.5, 12.0, spellData)
+    M33K.UI.UpdateVisuals(M33K.Engine.STATE_ACTIVE_OUTSIDE, 7.5, 12.0, spellData)
 
     Harness.AssertEquals(mainFrame:GetAlpha(), 1.0, "Active frame alpha should be 1.0")
 
     local statusFS = mainFrame._fontStrings[2]
-    Harness.AssertEquals(statusFS:GetText(), GAT.L["OUTSIDE_ZONE"], "Status text should be OUTSIDE")
+    Harness.AssertEquals(statusFS:GetText(), M33K.L["OUTSIDE_ZONE"], "Status text should be OUTSIDE")
 
     local r, g, b, a = statusFS:GetTextColor()
     Harness.AssertEquals(r, 1.0, "Outside text color R should be 1.0")
@@ -50,7 +50,7 @@ Harness.RunTest("3. UI.UpdateVisuals applies OUTSIDE (Red Alert) styling", funct
 end)
 
 Harness.RunTest("4. UI.UpdateVisuals applies EXPIRED (Dimmed) styling", function()
-    GAT.UI.UpdateVisuals(GAT.Engine.STATE_EXPIRED, 0, 0, nil)
+    M33K.UI.UpdateVisuals(M33K.Engine.STATE_EXPIRED, 0, 0, nil)
 
     local statusFS = mainFrame._fontStrings[2]
     Harness.AssertEquals(statusFS:GetText(), "", "Status text should be empty on expire")
@@ -62,10 +62,10 @@ end)
 Harness.RunTest("5. UI.OnUpdate updates countdown timer text and status bar fraction", function()
     -- Set active engine state
     Harness.SetTime(1000.0)
-    GAT.Engine._SetExpiration(1008.5, 12.0, { name = "Consecration", icon = 135926 })
-    GAT.Engine._SetStandingInside(true)
+    M33K.Engine._SetExpiration(1008.5, 12.0, { name = "Consecration", icon = 135926 })
+    M33K.Engine._SetStandingInside(true)
 
-    GAT.UI.OnUpdate()
+    M33K.UI.OnUpdate()
 
     local timerFS = mainFrame._fontStrings[1]
     Harness.AssertEquals(timerFS:GetText(), "8.5", "Timer string should format to '8.5'")
@@ -73,8 +73,8 @@ end)
 
 Harness.RunTest("6. Drag handlers and Lock/Unlock toggling", function()
     -- Unlock frame
-    GAT.UI.SetLocked(false)
-    Harness.AssertEquals(GAT.db.locked, false, "DB locked should be false")
+    M33K.UI.SetLocked(false)
+    Harness.AssertEquals(M33K.db.locked, false, "DB locked should be false")
 
     -- Simulate drag start
     mainFrame:FireScript("OnDragStart")
@@ -84,30 +84,30 @@ Harness.RunTest("6. Drag handlers and Lock/Unlock toggling", function()
     mainFrame:SetPoint("CENTER", UIParent, "CENTER", 120, -250)
     mainFrame:FireScript("OnDragStop")
     Harness.AssertEquals(mainFrame._isMoving, false, "Frame should stop moving on drag stop")
-    Harness.AssertEquals(GAT.db.posX, 120, "DB posX should update to 120")
-    Harness.AssertEquals(GAT.db.posY, -250, "DB posY should update to -250")
+    Harness.AssertEquals(M33K.db.posX, 120, "DB posX should update to 120")
+    Harness.AssertEquals(M33K.db.posY, -250, "DB posY should update to -250")
 
     -- Lock frame
-    GAT.UI.SetLocked(true)
-    Harness.AssertEquals(GAT.db.locked, true, "DB locked should be true")
+    M33K.UI.SetLocked(true)
+    Harness.AssertEquals(M33K.db.locked, true, "DB locked should be true")
     mainFrame:FireScript("OnDragStart")
     Harness.AssertEquals(mainFrame._isMoving, false, "Locked frame should not start moving")
 end)
 
 Harness.RunTest("7. Slash commands handle lock, reset, and toggle", function()
     -- Reset command
-    GAT.Options.HandleSlashCommand("reset")
-    Harness.AssertEquals(GAT.db.posX, 0, "Position X should be reset to 0")
-    Harness.AssertEquals(GAT.db.posY, -150, "Position Y should be reset to -150")
+    M33K.Options.HandleSlashCommand("reset")
+    Harness.AssertEquals(M33K.db.posX, 0, "Position X should be reset to 0")
+    Harness.AssertEquals(M33K.db.posY, -150, "Position Y should be reset to -150")
 
     -- Lock toggle command
-    GAT.db.locked = false
-    GAT.Options.HandleSlashCommand("lock")
-    Harness.AssertEquals(GAT.db.locked, true, "Slash lock should toggle locked state")
+    M33K.db.locked = false
+    M33K.Options.HandleSlashCommand("lock")
+    Harness.AssertEquals(M33K.db.locked, true, "Slash lock should toggle locked state")
 
     -- Add custom spell command
-    GAT.Options.HandleSlashCommand("add 7777 8888 14")
-    local custom = GAT.Spells.GetSpellByCastId(7777, GAT.db.customSpells)
+    M33K.Options.HandleSlashCommand("add 7777 8888 14")
+    local custom = M33K.Spells.GetSpellByCastId(7777, M33K.db.customSpells)
     Harness.Assert(custom ~= nil, "Custom spell 7777 should be added")
     Harness.AssertEquals(custom.buffSpellId, 8888, "Custom buff ID should be 8888")
     Harness.AssertEquals(custom.defaultDuration, 14, "Custom duration should be 14s")

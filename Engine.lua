@@ -1,9 +1,9 @@
-local AddonName, GAT = ...
-GAT = GAT or _G.GroundAuraTracker or {}
-_G.GroundAuraTracker = GAT
+local AddonName, M33K = ...
+M33K = M33K or _G.M33kAuraUtils or {}
+_G.M33kAuraUtils = M33K
 
-GAT.Engine = {}
-local Engine = GAT.Engine
+M33K.Engine = {}
+local Engine = M33K.Engine
 
 Engine.STATE_EXPIRED = 0
 Engine.STATE_ACTIVE_INSIDE = 1
@@ -62,8 +62,8 @@ end
 function Engine.OnSpellCastSuccess(sourceGUID, spellId)
     if sourceGUID ~= playerGUID then return end
 
-    local customSpells = GAT.db and GAT.db.customSpells
-    local spellData = GAT.Spells.GetSpellByCastId(spellId, customSpells)
+    local customSpells = M33K.db and M33K.db.customSpells
+    local spellData = M33K.Spells.GetSpellByCastId(spellId, customSpells)
 
     if spellData then
         local now = (GetTime and GetTime()) or 0

@@ -1,9 +1,9 @@
-local AddonName, GAT = ...
-GAT = GAT or _G.GroundAuraTracker or {}
-_G.GroundAuraTracker = GAT
+local AddonName, M33K = ...
+M33K = M33K or _G.M33kAuraUtils or {}
+_G.M33kAuraUtils = M33K
 
-GAT.Database = {}
-local Database = GAT.Database
+M33K.Database = {}
+local Database = M33K.Database
 
 Database.DefaultSettings = {
     profile = {
@@ -40,39 +40,39 @@ local function CopyDefaults(src, dst)
 end
 
 function Database.Initialize()
-    if not GroundAuraTrackerDB then
-        GroundAuraTrackerDB = {}
+    if not M33kAuraUtilsDB then
+        M33kAuraUtilsDB = {}
     end
-    GroundAuraTrackerDB = CopyDefaults(Database.DefaultSettings, GroundAuraTrackerDB)
-    GAT.db = GroundAuraTrackerDB.profile
-    return GAT.db
+    M33kAuraUtilsDB = CopyDefaults(Database.DefaultSettings, M33kAuraUtilsDB)
+    M33K.db = M33kAuraUtilsDB.profile
+    return M33K.db
 end
 
 function Database.GetSetting(key)
-    if GAT.db and GAT.db[key] ~= nil then
-        return GAT.db[key]
+    if M33K.db and M33K.db[key] ~= nil then
+        return M33K.db[key]
     end
     return Database.DefaultSettings.profile[key]
 end
 
 function Database.SetSetting(key, value)
-    if not GAT.db then
+    if not M33K.db then
         Database.Initialize()
     end
-    GAT.db[key] = value
+    M33K.db[key] = value
 end
 
 function Database.ResetPosition()
-    if GAT.db then
-        GAT.db.posX = Database.DefaultSettings.profile.posX
-        GAT.db.posY = Database.DefaultSettings.profile.posY
-        GAT.db.point = Database.DefaultSettings.profile.point
+    if M33K.db then
+        M33K.db.posX = Database.DefaultSettings.profile.posX
+        M33K.db.posY = Database.DefaultSettings.profile.posY
+        M33K.db.point = Database.DefaultSettings.profile.point
     end
 end
 
 function Database.AddCustomSpell(castId, buffId, duration, name)
-    if not GAT.db then Database.Initialize() end
-    GAT.db.customSpells[castId] = {
+    if not M33K.db then Database.Initialize() end
+    M33K.db.customSpells[castId] = {
         name = name or ("Custom Spell (" .. castId .. ")"),
         castSpellId = castId,
         buffSpellId = buffId,
@@ -82,7 +82,8 @@ function Database.AddCustomSpell(castId, buffId, duration, name)
 end
 
 function Database.RemoveCustomSpell(castId)
-    if GAT.db and GAT.db.customSpells then
-        GAT.db.customSpells[castId] = nil
+    if M33K.db and M33K.db.customSpells then
+        M33K.db.customSpells[castId] = nil
     end
 end
+

@@ -5,12 +5,12 @@ Harness.SetupEnvironment()
 local mockTWA, mockPrivate = Harness.SetupMockThisWeeksAuras()
 
 -- Load full addon + Injection module
-local GAT = {}
-Harness.LoadFullAddon(GAT)
-Harness.LoadAddonFile("Injection.lua", GAT)
-GAT.Database.Initialize()
-GAT.Engine.Initialize()
-GAT.Injection.Initialize()
+local M33K = {}
+Harness.LoadFullAddon(M33K)
+Harness.LoadAddonFile("Injection.lua", M33K)
+M33K.Database.Initialize()
+M33K.Engine.Initialize()
+M33K.Injection.Initialize()
 
 Harness.BeginSuite("Cross-Addon Injection & ThisWeeksAuras Hook Tests")
 
@@ -89,11 +89,11 @@ end)
 
 Harness.RunTest("4. SyncAuraState pushes dual-state into ThisWeeksAuras trigger state", function()
     Harness.SetTime(1000.0)
-    GAT.Engine._SetExpiration(1010.0, 12.0, { name = "Consecration", icon = 135926 })
-    GAT.Engine._SetStandingInside(true)
+    M33K.Engine._SetExpiration(1010.0, 12.0, { name = "Consecration", icon = 135926 })
+    M33K.Engine._SetStandingInside(true)
 
-    GAT.Injection.RegisterHookedAura("ConsecrateAura_Test", 1, 26573, 12)
-    GAT.Injection.SyncAuraState("ConsecrateAura_Test", 1, 26573, 12)
+    M33K.Injection.RegisterHookedAura("ConsecrateAura_Test", 1, 26573, 12)
+    M33K.Injection.SyncAuraState("ConsecrateAura_Test", 1, 26573, 12)
 
     local states = mockTWA.GetTriggerStateForTrigger("ConsecrateAura_Test", 1)
     Harness.Assert(states[""] ~= nil, "State table should have entry for ''")

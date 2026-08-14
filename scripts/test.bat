@@ -1,5 +1,5 @@
 @echo off
-REM scripts/test.bat: Run GroundAuraTracker native Lua tests
+REM scripts/test.bat: Run M33kAuraUtils native Lua tests
 cd /d "%~dp0\.."
 
 where lua >nul 2>nul

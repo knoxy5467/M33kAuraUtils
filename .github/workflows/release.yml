@@ -1,4 +1,4 @@
-name: Automated Release & CurseForge Publishing
+name: M33kAuraUtils Release & CurseForge Publishing
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate-and-publish:
-    name: Validate Tests & Publish to CurseForge
+    name: Validate Tests & Publish M33kAuraUtils
     runs-on: ubuntu-latest
 
     steps:
