@@ -1,10 +1,10 @@
 ## Interface: 120100
 ## Title: M33kAuraUtils
-## Notes: Smart ground zone and aura tracking utility for World of Warcraft.
-## Author: M33kAuraUtils Team
+## Notes: Seamlessly creates WeakAuras and M33kAuras triggers for buffs and cooldowns tracked by the Blizzard Cooldown Manager in World of Warcraft: Midnight.
+## Author: M33k Team
 ## Version: @project-version@
 ## SavedVariables: M33kAuraUtilsDB
-## OptionalDeps: ThisWeeksAuras, WeakAuras
+## OptionalDeps: M33kAuras, ThisWeeksAuras, WeakAuras
 ## IconTexture: Interface\Icons\Spell_Holy_InnerFire
 ## X-Category: Combat
 ## X-License: MIT

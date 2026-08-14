@@ -1,7 +1,7 @@
 # M33kAuraUtils — CurseForge Listing Content
 
 ## 1. Project Summary (For CurseForge "Summary" Field)
-> Real-time dual-state ground zone duration and in-zone aura tracker for World of Warcraft retail, with WeakAuras integration and custom spell support.
+> Seamlessly creates WeakAuras and M33kAuras triggers for buffs and cooldowns tracked by the Blizzard Cooldown Manager in World of Warcraft: Midnight.
 
 ---
 
@@ -10,65 +10,48 @@
 ```markdown
 # M33kAuraUtils
 
-**M33kAuraUtils** is a lightweight, zero-dependency combat utility for World of Warcraft (Retail) that tracks ground-placed spells and zone auras with real-time **dual-state awareness**. 
+**M33kAuraUtils** is a lightweight combat and aura utility for World of Warcraft (Retail & Midnight) designed to bridge custom auras with the native **Blizzard Cooldown Manager**.
 
-Standard unit aura tracking fails for ground-targeted spells because the player buff only exists while physically standing inside the area of effect. If you step out, traditional auras disappear entirely—even if your zone has 10 seconds remaining. 
-
-**M33kAuraUtils bridges this gap** by monitoring both the ground effect's remaining lifetime and your player presence inside the zone.
+With the evolving API and cooldown architecture in *Midnight*, tracking player abilities, buffs, and rotational cooldowns directly through standard triggers can often result in desynchronization or missing aura states. **M33kAuraUtils** solves this by hooking into the Blizzard Cooldown Manager pipeline, providing enhanced aura trigger options and synchronization for **M33kAuras**, **ThisWeeksAuras**, and **WeakAuras**.
 
 ---
 
 ### ✨ Key Features
 
-* **Dual-State Tracking:** Simultaneously tracks the remaining ground duration (from spell cast) and your active buff state (standing inside vs. outside).
-* **Smart Visual Feedback:**
-  * 🟢 **Active & Standing Inside:** Full color with real-time countdown timer.
-  * 🔴 **Active but Outside (Alert):** Distinct high-contrast warning with countdown to step back in.
-  * ⚪ **Expired / Inactive:** Dimmed or hidden display when no active ground zone exists.
-* **Movable & Configurable UI:** Clean display frame with custom sizing, positioning, status bar, and timer text.
-* **Custom Spell Registration:** Add any custom ground-placed spell or talent proc directly via slash commands without modifying code.
-* **Cross-Addon Injection & WeakAuras Support:** Seamlessly integrates with **ThisWeeksAuras** and **WeakAuras**, adding native ground tracking toggles directly to standard aura triggers.
-* **Ultra Lightweight & High Performance:** Zero external library dependencies (no LibSharedMedia or heavy framework overhead); pure native WoW API execution.
+* **Blizzard Cooldown Manager Integration:** Directly interfaces with Blizzard's native cooldown and buff management systems to ensure precise, authoritative timer and state data.
+* **M33kAuras & WeakAuras Synergy:** Seamlessly integrates into your existing aura framework, injecting optimized trigger options for player buffs, charges, and cooldowns.
+* **Midnight Ready:** Built from the ground up for *World of Warcraft: Midnight* (12.0+) and modern retail API standards.
+* **Accurate Buff & State Tracking:** Solves complex aura tracking edge cases where standard unit auras fail to reflect active combat states or cooldown resets.
+* **Zero Dependency Overhead:** High-performance, pure Lua implementation with zero bloat or third-party framework overhead.
 
 ---
 
-### 🛡️ Supported Spells (Built-in Presets)
+### ⚙️ How It Works
 
-M33kAuraUtils includes out-of-the-box support for:
-
-| Class | Ground Spell | Buff Effect | Default Duration |
-| :--- | :--- | :--- | :--- |
-| **Paladin** | Consecration (*Spell 26573*) | Consecration (*Buff 188370*) | 12.0s |
-| **Death Knight** | Death and Decay (*Spell 43265*) | Death and Decay (*Buff 188290*) | 10.0s |
-| **Death Knight** | Defile (*Spell 152280*) | Defile (*Buff 391459*) | 10.0s |
-| **Druid** | Efflorescence (*Spell 145205*) | Efflorescence (*Buff 145205*) | 30.0s |
-| **Shaman** | Healing Rain (*Spell 73920*) | Healing Rain (*Buff 73920*) | 10.0s |
-| **Demon Hunter** | Sigil of Flame (*Spell 204596*) | Sigil of Flame (*Buff 204596*) | 6.0s |
+1. **Automatic Cooldown Hooking:** M33kAuraUtils monitors the Blizzard Cooldown Manager events and synchronizes state updates in real time.
+2. **Enhanced Trigger Options:** When configuring auras in M33kAuras or WeakAuras, M33kAuraUtils provides direct selector options to track buffs and cooldowns through the Blizzard Cooldown Manager pipeline.
+3. **Instant Visual Feedback:** Custom auras reflect exact expiration times, charges, and active states with zero desync.
 
 ---
 
-### ⌨️ Slash Commands
+### ⌨️ Slash Commands & Configuration
 
-Use `/m33k`, `/m33kaura`, or `/m33kaurautils` in-game to configure:
-
-* `/m33k lock` — Toggle locking/unlocking the UI frame for dragging and repositioning.
-* `/m33k reset` — Reset frame position to default center coordinates.
-* `/m33k toggle` — Toggle the visual tracker frame visibility on/off.
-* `/m33k add <castSpellId> <buffSpellId> [duration]` — Register a custom ground spell.
-* `/m33k remove <castSpellId>` — Remove a registered custom ground spell.
+* `/m33k` — Display addon status and available utility commands.
+* `/m33k reset` — Reset configuration settings to default.
+* `/m33k toggle` — Toggle debug and diagnostic monitoring mode.
 
 ---
 
-### ⚙️ Installation
+### 📦 Installation
 
-1. Install via the **CurseForge App** (recommended) or manually extract into your `World of Warcraft\_retail_\Interface\AddOns\` directory.
-2. Ensure `M33kAuraUtils` is enabled in your AddOn list at character selection.
-3. Log in and position the tracker where you prefer using `/m33k lock`.
+1. Install via the **CurseForge App** (recommended) or extract into your `World of Warcraft\_retail_\Interface\AddOns\` directory.
+2. Ensure both **`M33kAuraUtils`** and your aura framework (**`M33kAuras`** or **`WeakAuras`**) are enabled in your AddOn list.
+3. Log into the game—M33kAuraUtils will automatically hook into the Cooldown Manager.
 
 ---
 
 ### 🔗 Links & Community
 
-* **Source Code & Issue Tracker:** [GitHub Repository](https://github.com/knoxy5467/M33kAuraUtils)
-* **Report Bugs & Suggest Features:** [GitHub Issues](https://github.com/knoxy5467/M33kAuraUtils/issues)
+* **Source Code:** [GitHub Repository](https://github.com/knoxy5467/M33kAuraUtils)
+* **Bug Reports & Feedback:** [GitHub Issues](https://github.com/knoxy5467/M33kAuraUtils/issues)
 ```
