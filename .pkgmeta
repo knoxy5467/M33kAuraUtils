@@ -1,0 +1,15 @@
+package-as: GroundAuraTracker
+enable-nolib-creation: false
+
+ignore:
+  - .github
+  - .gitignore
+  - build.lua
+  - scripts
+  - tests
+  - wiki
+  - CONTRIBUTING.md
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown

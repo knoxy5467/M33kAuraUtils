@@ -2,13 +2,14 @@
 ## Title: GroundAuraTracker
 ## Notes: Smart ground zone and player in-zone aura tracker for Consecration, Death & Decay, Efflorescence, and more.
 ## Author: GroundAuraTracker Team
-## Version: 1.0.0
+## Version: @project-version@
 ## SavedVariables: GroundAuraTrackerDB
 ## OptionalDeps: ThisWeeksAuras, WeakAuras
 ## IconTexture: Interface\Icons\Spell_Holy_InnerFire
 ## X-Category: Combat
 ## X-License: MIT
-## X-Website: https://github.com/example/GroundAuraTracker
+## X-Curse-Project-ID: 000000
+## X-Wago-ID: 000000
 
 Locales\Locales.lua
 Spells.lua
