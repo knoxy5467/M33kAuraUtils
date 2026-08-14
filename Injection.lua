@@ -6,6 +6,11 @@ M33K.Injection = {}
 local Injection = M33K.Injection
 
 local hookedAuras = {}
+local isInitialized = false
+
+local function GetAuraFramework()
+    return _G.ThisWeeksAuras or _G.WeakAuras or _G.M33kAuras
+end
 
 function Injection.WrapBuffTriggerOptions(origFunc)
     return function(data, triggernum)
@@ -17,6 +22,8 @@ function Injection.WrapBuffTriggerOptions(origFunc)
 
         local aura_options = optionsTable["trigger." .. triggernum .. ".aura_options"] or optionsTable
         if aura_options then
+            local WA = GetAuraFramework()
+
             -- Inject Cooldown Viewer Header
             aura_options.cvHeader = {
                 type = "header",
@@ -39,11 +46,11 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 get = function() return trigger.useCooldownViewer end,
                 set = function(info, v)
                     trigger.useCooldownViewer = v
-                    if ThisWeeksAuras and ThisWeeksAuras.Add then
-                        ThisWeeksAuras.Add(data)
+                    if WA and WA.Add then
+                        WA.Add(data)
                     end
-                    if ThisWeeksAuras and ThisWeeksAuras.ClearAndUpdateOptions then
-                        ThisWeeksAuras.ClearAndUpdateOptions(data.id)
+                    if WA and WA.ClearAndUpdateOptions then
+                        WA.ClearAndUpdateOptions(data.id)
                     end
                 end,
             }
@@ -69,8 +76,8 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                         table.insert(list, tonumber(id))
                     end
                     trigger.cvLinkedSpells = list
-                    if ThisWeeksAuras and ThisWeeksAuras.Add then
-                        ThisWeeksAuras.Add(data)
+                    if WA and WA.Add then
+                        WA.Add(data)
                     end
                 end,
             }
@@ -94,9 +101,10 @@ function Injection.BuildTargetSpellList(trigger)
 end
 
 function Injection.SyncAuraState(auraId, triggernum, targetSpells)
-    if not ThisWeeksAuras or not ThisWeeksAuras.GetTriggerStateForTrigger then return end
+    local WA = GetAuraFramework()
+    if not WA or not WA.GetTriggerStateForTrigger then return end
 
-    local allStates = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)
+    local allStates = WA.GetTriggerStateForTrigger(auraId, triggernum)
     if not allStates then return end
 
     local active, exp, dur, icon = M33K.CooldownViewer.IsBuffActive(targetSpells)
@@ -117,23 +125,25 @@ function Injection.SyncAuraState(auraId, triggernum, targetSpells)
         }
     end
 
-    if ThisWeeksAuras.UpdatedTriggerState then
-        ThisWeeksAuras.UpdatedTriggerState(auraId)
+    if WA.UpdatedTriggerState then
+        WA.UpdatedTriggerState(auraId)
     end
 end
 
 function Injection.Initialize()
-    if not ThisWeeksAuras then return false end
+    local WA = GetAuraFramework()
+    if not WA then return false end
 
-    -- Hook Buff trigger options in OptionsPrivate
-    if OptionsPrivate and OptionsPrivate.GetBuffTriggerOptions then
-        OptionsPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(OptionsPrivate.GetBuffTriggerOptions)
+    -- Hook Buff trigger options in OptionsPrivate / Options globals
+    local optPrivate = _G.OptionsPrivate or (WA and WA.OptionsPrivate)
+    if optPrivate and optPrivate.GetBuffTriggerOptions then
+        optPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(optPrivate.GetBuffTriggerOptions)
     end
 
     -- Hook trigger system registration
-    if ThisWeeksAuras.RegisterTriggerSystemOptions then
-        local orig_Register = ThisWeeksAuras.RegisterTriggerSystemOptions
-        ThisWeeksAuras.RegisterTriggerSystemOptions = function(systemTypes, optionsFunc)
+    if WA.RegisterTriggerSystemOptions and not isInitialized then
+        local orig_Register = WA.RegisterTriggerSystemOptions
+        WA.RegisterTriggerSystemOptions = function(systemTypes, optionsFunc)
             for _, sysType in ipairs(systemTypes) do
                 if sysType == "aura2" then
                     optionsFunc = Injection.WrapBuffTriggerOptions(optionsFunc)
@@ -141,6 +151,7 @@ function Injection.Initialize()
             end
             return orig_Register(systemTypes, optionsFunc)
         end
+        isInitialized = true
     end
 
     return true
