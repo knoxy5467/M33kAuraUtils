@@ -1,6 +1,6 @@
 # Supported Spells & Custom Spells
 
-GroundAuraTracker supports built-in presets for popular ground spells and allows dynamic custom spell registration.
+M33kAuraUtils supports built-in presets for popular ground spells and allows dynamic custom spell registration.
 
 ---
 
@@ -23,12 +23,12 @@ You can add any custom ground-placed spell via slash command or directly in Lua.
 
 ### Via Slash Command
 ```text
-/gat add <castSpellId> <buffSpellId> [durationInSeconds]
+/m33k add <castSpellId> <buffSpellId> [durationInSeconds]
 ```
 
 #### Example: Adding a custom ground buff
 ```text
-/gat add 12345 54321 15
+/m33k add 12345 54321 15
 ```
 - `12345`: The Spell ID in your spellbook that you cast on the ground.
 - `54321`: The Spell ID of the buff you get while standing in it.
@@ -37,8 +37,8 @@ You can add any custom ground-placed spell via slash command or directly in Lua.
 ### Via Lua API
 ```lua
 -- In any custom script or addon:
-local GAT = GroundAuraTracker
-if GAT and GAT.Database then
-    GAT.Database.AddCustomSpell(12345, 54321, 15, "My Custom Spell")
+local M33K = _G.M33kAuraUtils or _G.M33K
+if M33K and M33K.Database then
+    M33K.Database.AddCustomSpell(12345, 54321, 15, "My Custom Spell")
 end
 ```

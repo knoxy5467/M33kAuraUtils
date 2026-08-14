@@ -1,6 +1,6 @@
 # Publishing to CurseForge & Wago
 
-This guide explains how to publish **GroundAuraTracker** to CurseForge and Wago using automated GitHub Actions.
+This guide explains how to publish **M33kAuraUtils** to CurseForge and Wago using automated GitHub Actions.
 
 ---
 
@@ -11,11 +11,11 @@ This guide explains how to publish **GroundAuraTracker** to CurseForge and Wago 
 3. Choose:
    - **Game:** World of Warcraft
    - **Section:** Addons $\rightarrow$ Combat / Class
-   - **Name:** `GroundAuraTracker`
+   - **Name:** `M33kAuraUtils`
    - **Description:** Copy the content from [README.md](../README.md).
    - **License:** MIT License
 4. Once created, note your **Project ID** from the *About This Project* box on the right sidebar.
-5. In your `GroundAuraTracker.toc`, replace `000000` with your actual CurseForge Project ID:
+5. In your `M33kAuraUtils.toc`, replace `000000` with your actual CurseForge Project ID:
    ```toc
    ## X-Curse-Project-ID: 123456
    ```
@@ -54,6 +54,6 @@ git push origin v1.0.0
 
 ### What Happens Automatically:
 1. GitHub Actions triggers `.github/workflows/release.yml`.
-2. All 83 unit tests and syntax checks run locally in the CI runner.
+2. All unit tests and syntax checks run locally in the CI runner (`lua build.lua`).
 3. `BigWigsMods/packager@v2` packages the addon (excluding tests, docs, and dev scripts via `.pkgmeta`).
 4. Injects version tags and uploads the `.zip` release directly to **CurseForge**, **Wago**, and **GitHub Releases** simultaneously!
