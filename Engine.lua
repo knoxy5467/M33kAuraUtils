@@ -2,127 +2,128 @@ local AddonName, M33K = ...
 M33K = M33K or _G.M33kAuraUtils or {}
 _G.M33kAuraUtils = M33K
 
+M33K.CooldownViewer = {}
+local CDViewer = M33K.CooldownViewer
+
+-- Standard Blizzard Cooldown Viewers
+local VIEWERS = {
+    "BuffIconCooldownViewer",
+    "EssentialCooldownViewer",
+    "UtilityCooldownViewer",
+}
+
+-- Normalize spell input into a lookup table { [spellID] = true }
+local function NormalizeTargetSpells(targetSpells)
+    local lookup = {}
+    if type(targetSpells) == "number" then
+        lookup[targetSpells] = true
+    elseif type(targetSpells) == "string" then
+        local num = tonumber(targetSpells)
+        if num then
+            lookup[num] = true
+        else
+            lookup[targetSpells] = true
+        end
+    elseif type(targetSpells) == "table" then
+        for k, v in pairs(targetSpells) do
+            if type(k) == "number" and type(v) == "number" then
+                lookup[v] = true
+            elseif type(k) == "number" and type(v) == "boolean" and v == true then
+                lookup[k] = true
+            elseif type(v) == "number" then
+                lookup[v] = true
+            end
+        end
+    end
+    return lookup
+end
+
+-- Core Cooldown Viewer & Aura check logic
+function CDViewer.IsBuffActive(targetSpells)
+    local TARGET_SPELLS = NormalizeTargetSpells(targetSpells)
+
+    -- A. Direct check for unit aura via C_UnitAuras
+    if C_UnitAuras and type(C_UnitAuras.GetUnitAuraBySpellID) == "function" then
+        for spellID in pairs(TARGET_SPELLS) do
+            if type(spellID) == "number" then
+                local aura = C_UnitAuras.GetUnitAuraBySpellID("player", spellID)
+                if aura then
+                    local dur = aura.duration or 0
+                    local exp = aura.expirationTime or 0
+                    local icon = aura.icon
+                    return true, exp, dur, icon
+                end
+            end
+        end
+    end
+
+    -- B. Blizzard Cooldown Viewer check
+    for _, viewerName in ipairs(VIEWERS) do
+        local viewer = _G[viewerName]
+        if viewer and viewer.itemFramePool and type(viewer.itemFramePool.EnumerateActive) == "function" then
+            for icon in viewer.itemFramePool:EnumerateActive() do
+                -- CRITICAL: Must be actively displaying an active AURA/BUFF timer (not spell CD)
+                if icon and (not icon.IsShown or icon:IsShown()) and icon.cooldownUseAuraDisplayTime == true then
+                    local info = icon.cooldownInfo
+                    local cid = icon.cooldownID
+
+                    if not info and cid and not (issecretvalue and issecretvalue(cid))
+                       and C_CooldownViewer and type(C_CooldownViewer.GetCooldownViewerCooldownInfo) == "function" then
+                        local ok, cdInfo = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cid)
+                        if ok and type(cdInfo) == "table" then
+                            info = cdInfo
+                        end
+                    end
+
+                    local rawID = type(icon.spellID) == "number" and icon.spellID or nil
+                    local isMatch = (rawID and TARGET_SPELLS[rawID])
+                                 or (info and (TARGET_SPELLS[info.spellID] or TARGET_SPELLS[info.overrideSpellID] or TARGET_SPELLS[info.overrideTooltipSpellID]))
+
+                    if not isMatch and info and type(info.linkedSpellIDs) == "table" then
+                        for _, id in ipairs(info.linkedSpellIDs) do
+                            if TARGET_SPELLS[id] then
+                                isMatch = true
+                                break
+                            end
+                        end
+                    end
+
+                    if isMatch then
+                        local exp = icon.cooldownExpirationTime or (info and info.cooldownExpirationTime) or 0
+                        local dur = icon.cooldownDuration or (info and info.cooldownDuration) or 0
+                        local iconTexture = icon.icon and icon.icon:GetTexture() or nil
+                        return true, exp, dur, iconTexture
+                    end
+                end
+            end
+        end
+    end
+
+    return false, 0, 0, nil
+end
+
+-- Global helper export for WeakAuras / Custom triggers
+_G.M33kAuraUtils.IsBuffActive = CDViewer.IsBuffActive
+_G.M33kAuraUtils.IsCooldownViewerBuffActive = CDViewer.IsBuffActive
+
+-- Engine wrapper for lifecycle events and callback subscriptions
 M33K.Engine = {}
 local Engine = M33K.Engine
 
-Engine.STATE_EXPIRED = 0
-Engine.STATE_ACTIVE_INSIDE = 1
-Engine.STATE_ACTIVE_OUTSIDE = 2
-
 local callbacks = {}
-local activeSpell = nil
-local groundExpirationTime = 0
-local groundDuration = 0
-local isStandingInside = false
-local currentState = Engine.STATE_EXPIRED
-local playerGUID = nil
-local playerClass = nil
-
-function Engine.RegisterCallback(name, func)
-    callbacks[name] = func
-end
-
-function Engine.UnregisterCallback(name)
-    callbacks[name] = nil
-end
-
-local function FireCallbacks(state, remaining, duration, spellData)
-    for _, func in pairs(callbacks) do
-        pcall(func, state, remaining, duration, spellData)
-    end
-end
-
-function Engine.GetActiveState()
-    local now = (GetTime and GetTime()) or 0
-    local remaining = math.max(0, groundExpirationTime - now)
-    local state = Engine.STATE_EXPIRED
-
-    if remaining > 0 then
-        if isStandingInside then
-            state = Engine.STATE_ACTIVE_INSIDE
-        else
-            state = Engine.STATE_ACTIVE_OUTSIDE
-        end
-    end
-
-    return state, remaining, groundDuration, activeSpell
-end
-
-function Engine.EvaluateState()
-    local oldState = currentState
-    local newState, remaining, duration, spellData = Engine.GetActiveState()
-
-    currentState = newState
-    if oldState ~= newState or remaining > 0 then
-        FireCallbacks(newState, remaining, duration, spellData)
-    end
-    return newState
-end
-
-function Engine.OnSpellCastSuccess(sourceGUID, spellId)
-    if sourceGUID ~= playerGUID then return end
-
-    local customSpells = M33K.db and M33K.db.customSpells
-    local spellData = M33K.Spells.GetSpellByCastId(spellId, customSpells)
-
-    if spellData then
-        local now = (GetTime and GetTime()) or 0
-        activeSpell = spellData
-        groundDuration = spellData.defaultDuration or 10
-        groundExpirationTime = now + groundDuration
-
-        -- Check immediate aura presence
-        if spellData.buffSpellId then
-            local aura = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(spellData.buffSpellId)
-            isStandingInside = (aura ~= nil)
-        else
-            -- If no specific buff spell, player is inside by default when casting
-            isStandingInside = true
-        end
-
-        Engine.EvaluateState()
-    end
-end
-
-function Engine.OnUnitAura(unit)
-    if unit ~= "player" then return end
-    if not activeSpell or not activeSpell.buffSpellId then return end
-
-    local aura = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(activeSpell.buffSpellId)
-    local wasInside = isStandingInside
-    isStandingInside = (aura ~= nil)
-
-    if wasInside ~= isStandingInside then
-        Engine.EvaluateState()
-    end
-end
-
-function Engine.Reset()
-    activeSpell = nil
-    groundExpirationTime = 0
-    groundDuration = 0
-    isStandingInside = false
-    currentState = Engine.STATE_EXPIRED
-    Engine.EvaluateState()
-end
 
 function Engine.Initialize()
-    if UnitGUID then
-        playerGUID = UnitGUID("player")
-    end
-    if UnitClass then
-        local _, classFilename = UnitClass("player")
-        playerClass = classFilename
-    end
-    Engine.Reset()
+    callbacks = {}
 end
 
--- Export internals for test harness
-Engine._SetPlayerGUID = function(guid) playerGUID = guid end
-Engine._SetPlayerClass = function(cls) playerClass = cls end
-Engine._SetStandingInside = function(val) isStandingInside = val end
-Engine._SetExpiration = function(exp, dur, spell)
-    groundExpirationTime = exp
-    groundDuration = dur
-    activeSpell = spell
+function Engine.RegisterCallback(id, fn)
+    callbacks[id] = fn
+end
+
+function Engine.UnregisterCallback(id)
+    callbacks[id] = nil
+end
+
+function Engine.CheckAura(targetSpells)
+    return CDViewer.IsBuffActive(targetSpells)
 end

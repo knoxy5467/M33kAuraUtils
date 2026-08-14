@@ -15,30 +15,30 @@ function Injection.WrapBuffTriggerOptions(origFunc)
         local trigger = data.triggers and data.triggers[triggernum] and data.triggers[triggernum].trigger
         if not trigger then return optionsTable end
 
-        local aura_options = optionsTable["trigger." .. triggernum .. ".aura_options"]
+        local aura_options = optionsTable["trigger." .. triggernum .. ".aura_options"] or optionsTable
         if aura_options then
-            -- Inject Smart Ground Tracking header
-            aura_options.groundTrackingHeader = {
+            -- Inject Cooldown Viewer Header
+            aura_options.cvHeader = {
                 type = "header",
-                name = "|cFF00FF00Smart Ground Aura Tracking|r",
+                name = "|cFF00B4FFBlizzard Cooldown Viewer Tracking (M33kAuraUtils)|r",
                 order = 50.0,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player")
                 end,
             }
 
-            -- Inject Toggle
-            aura_options.useGroundTracking = {
+            -- Inject Cooldown Viewer Toggle
+            aura_options.useCooldownViewer = {
                 type = "toggle",
-                name = "Enable Ground Zone Tracking",
-                desc = "Tracks both ground zone duration and whether the player is standing inside.",
+                name = "Enable Cooldown Viewer Tracking",
+                desc = "Tracks active buff timers through Blizzard Cooldown Viewers (BuffIconCooldownViewer, EssentialCooldownViewer, UtilityCooldownViewer) and C_UnitAuras.",
                 order = 50.1,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player")
                 end,
-                get = function() return trigger.useGroundTracking end,
+                get = function() return trigger.useCooldownViewer end,
                 set = function(info, v)
-                    trigger.useGroundTracking = v
+                    trigger.useCooldownViewer = v
                     if ThisWeeksAuras and ThisWeeksAuras.Add then
                         ThisWeeksAuras.Add(data)
                     end
@@ -48,18 +48,27 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 end,
             }
 
-            -- Inject Ground Duration Input
-            aura_options.groundDuration = {
+            -- Inject Linked Spell IDs Input
+            aura_options.cvLinkedSpells = {
                 type = "input",
-                name = "Ground Duration (sec)",
-                desc = "Lifetime of the ground-placed effect in seconds.",
+                name = "Linked Spell IDs",
+                desc = "Comma-separated list of spell IDs to match in Cooldown Viewer (e.g. 188370, 26573).",
                 order = 50.2,
                 hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useGroundTracking)
+                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
                 end,
-                get = function() return tostring(trigger.groundDuration or 12) end,
+                get = function()
+                    if type(trigger.cvLinkedSpells) == "table" then
+                        return table.concat(trigger.cvLinkedSpells, ", ")
+                    end
+                    return tostring(trigger.cvLinkedSpells or "")
+                end,
                 set = function(info, v)
-                    trigger.groundDuration = tonumber(v) or 12
+                    local list = {}
+                    for id in string.gmatch(v or "", "(%d+)") do
+                        table.insert(list, tonumber(id))
+                    end
+                    trigger.cvLinkedSpells = list
                     if ThisWeeksAuras and ThisWeeksAuras.Add then
                         ThisWeeksAuras.Add(data)
                     end
@@ -71,24 +80,42 @@ function Injection.WrapBuffTriggerOptions(origFunc)
     end
 end
 
-function Injection.SyncAuraState(auraId, triggernum, spellId, duration)
+function Injection.BuildTargetSpellList(trigger)
+    local targets = {}
+    if trigger.spellId then targets[trigger.spellId] = true end
+    if trigger.spellName then targets[trigger.spellName] = true end
+    if type(trigger.spellIds) == "table" then
+        for _, id in ipairs(trigger.spellIds) do targets[id] = true end
+    end
+    if type(trigger.cvLinkedSpells) == "table" then
+        for _, id in ipairs(trigger.cvLinkedSpells) do targets[id] = true end
+    end
+    return targets
+end
+
+function Injection.SyncAuraState(auraId, triggernum, targetSpells)
     if not ThisWeeksAuras or not ThisWeeksAuras.GetTriggerStateForTrigger then return end
 
     local allStates = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)
     if not allStates then return end
 
-    local state, remaining, dur, spellData = M33K.Engine.GetActiveState()
+    local active, exp, dur, icon = M33K.CooldownViewer.IsBuffActive(targetSpells)
 
-    allStates[""] = {
-        show = remaining > 0,
-        changed = true,
-        progressType = "timed",
-        duration = duration or dur or 12,
-        expirationTime = (GetTime and GetTime() or 0) + remaining,
-        inside = (state == M33K.Engine.STATE_ACTIVE_INSIDE),
-        name = spellData and spellData.name or "",
-        icon = spellData and spellData.icon or 135926,
-    }
+    if active then
+        allStates[""] = {
+            show = true,
+            changed = true,
+            progressType = "timed",
+            duration = dur or 0,
+            expirationTime = exp or 0,
+            icon = icon or 136243,
+        }
+    else
+        allStates[""] = {
+            show = false,
+            changed = true,
+        }
+    end
 
     if ThisWeeksAuras.UpdatedTriggerState then
         ThisWeeksAuras.UpdatedTriggerState(auraId)
@@ -98,11 +125,12 @@ end
 function Injection.Initialize()
     if not ThisWeeksAuras then return false end
 
-    -- Hook options generator
+    -- Hook Buff trigger options in OptionsPrivate
     if OptionsPrivate and OptionsPrivate.GetBuffTriggerOptions then
         OptionsPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(OptionsPrivate.GetBuffTriggerOptions)
     end
 
+    -- Hook trigger system registration
     if ThisWeeksAuras.RegisterTriggerSystemOptions then
         local orig_Register = ThisWeeksAuras.RegisterTriggerSystemOptions
         ThisWeeksAuras.RegisterTriggerSystemOptions = function(systemTypes, optionsFunc)
@@ -115,25 +143,16 @@ function Injection.Initialize()
         end
     end
 
-    -- Hook runtime engine updates
-    M33K.Engine.RegisterCallback("ThisWeeksAuras_Sync", function(state, remaining, duration, spellData)
-        for auraId, info in pairs(hookedAuras) do
-            Injection.SyncAuraState(auraId, info.triggernum, info.spellId, info.duration)
-        end
-    end)
-
     return true
 end
 
-function Injection.RegisterHookedAura(auraId, triggernum, spellId, duration)
+function Injection.RegisterHookedAura(auraId, triggernum, targetSpells)
     hookedAuras[auraId] = {
         triggernum = triggernum,
-        spellId = spellId,
-        duration = duration,
+        targetSpells = targetSpells,
     }
 end
 
 function Injection.UnregisterHookedAura(auraId)
     hookedAuras[auraId] = nil
 end
-

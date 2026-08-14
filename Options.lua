@@ -6,53 +6,26 @@ M33K.Options = {}
 local Options = M33K.Options
 
 function Options.HandleSlashCommand(msg)
-    local args = {}
-    for word in string.gmatch(msg or "", "%S+") do
-        table.insert(args, string.lower(word))
-    end
+    local cmd, arg = string.match(msg or "", "^(%a+)%s*(.*)$")
+    cmd = string.lower(cmd or "")
 
-    local cmd = args[1] or "help"
-
-    if cmd == "lock" then
-        local isLocked = M33K.db and M33K.db.locked
-        M33K.UI.SetLocked(not isLocked)
-
-    elseif cmd == "reset" then
-        M33K.UI.ResetPosition()
-
-    elseif cmd == "toggle" then
-        if M33kAuraUtilsMainFrame then
-            if M33kAuraUtilsMainFrame:IsShown() then
-                M33kAuraUtilsMainFrame:Hide()
-            else
-                M33kAuraUtilsMainFrame:Show()
-            end
-        end
-
-    elseif cmd == "add" and args[2] and args[3] then
-        local castId = tonumber(args[2])
-        local buffId = tonumber(args[3])
-        local duration = tonumber(args[4]) or 10
-        if castId and buffId then
-            M33K.Database.AddCustomSpell(castId, buffId, duration)
-            print(string.format("M33kAuraUtils: Added custom spell CastID=%d, BuffID=%d, Duration=%ds", castId, buffId, duration))
-        end
-
+    if cmd == "debug" or cmd == "toggle" then
+        local current = M33K.Database.GetSetting("debug")
+        M33K.Database.SetSetting("debug", not current)
+        print("|cFF00B4FFM33kAuraUtils|r: Debug mode is now " .. (not current and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+    elseif cmd == "status" or cmd == "info" then
+        print("|cFF00B4FFM33kAuraUtils|r: Active and integrated with Blizzard Cooldown Viewer.")
     else
-        print("|cFF00FF00" .. M33K.L["SLASH_HELP_HEADER"] .. "|r")
-        print(M33K.L["SLASH_HELP_LOCK"])
-        print(M33K.L["SLASH_HELP_RESET"])
-        print(M33K.L["SLASH_HELP_TOGGLE"])
-        print("  /m33k add <castSpellId> <buffSpellId> [duration] - Add custom ground spell")
+        print("|cFF00B4FFM33kAuraUtils|r: Blizzard Cooldown Viewer & Aura integration active. Configure triggers directly in M33kAuras / WeakAuras GUI.")
     end
 end
 
-function Options.Initialize()
+if SlashCmdList then
     SLASH_M33KAURAUTILS1 = "/m33k"
     SLASH_M33KAURAUTILS2 = "/m33kaura"
     SLASH_M33KAURAUTILS3 = "/m33kaurautils"
+
     SlashCmdList["M33KAURAUTILS"] = function(msg)
         Options.HandleSlashCommand(msg)
     end
 end
-

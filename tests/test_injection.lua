@@ -1,104 +1,106 @@
 local Harness = require("tests.test_harness")
 Harness.SetupEnvironment()
 
--- Setup mock ThisWeeksAuras environment
-local mockTWA, mockPrivate = Harness.SetupMockThisWeeksAuras()
-
--- Load full addon + Injection module
 local M33K = {}
 Harness.LoadFullAddon(M33K)
-Harness.LoadAddonFile("Injection.lua", M33K)
-M33K.Database.Initialize()
-M33K.Engine.Initialize()
 M33K.Injection.Initialize()
 
-Harness.BeginSuite("Cross-Addon Injection & ThisWeeksAuras Hook Tests")
+Harness.BeginSuite("Cross-Addon Injection & Cooldown Viewer Integration Tests")
 
-Harness.RunTest("1. Injection wraps BuffTrigger options generator and injects controls", function()
+Harness.RunTest("1. Injection wraps BuffTrigger options generator and injects Cooldown Viewer controls", function()
     local dummyData = {
-        id = "ConsecrateAura_Test",
+        id = "TestCooldownAura",
         triggers = {
             [1] = {
                 trigger = {
                     type = "aura2",
                     unit = "player",
-                    useGroundTracking = false,
-                    groundDuration = 12,
+                    spellId = 188370,
+                    useCooldownViewer = false,
                 }
             }
         }
     }
 
-    local wrappedOptions = OptionsPrivate.GetBuffTriggerOptions(dummyData, 1)
-    Harness.Assert(wrappedOptions ~= nil, "Wrapped options table should not be nil")
+    local options = OptionsPrivate.GetBuffTriggerOptions(dummyData, 1)
+    Harness.Assert(options ~= nil, "Options table should be returned")
 
-    local aura_options = wrappedOptions["trigger.1.aura_options"]
-    Harness.Assert(aura_options ~= nil, "trigger.1.aura_options should exist")
-
-    -- Verify injected fields
-    Harness.Assert(aura_options.groundTrackingHeader ~= nil, "groundTrackingHeader should be injected")
-    Harness.Assert(aura_options.useGroundTracking ~= nil, "useGroundTracking toggle should be injected")
-    Harness.Assert(aura_options.groundDuration ~= nil, "groundDuration input should be injected")
+    local aura_options = options["trigger.1.aura_options"]
+    Harness.Assert(aura_options ~= nil, "aura_options should exist")
+    Harness.Assert(aura_options.cvHeader ~= nil, "cvHeader should be injected")
+    Harness.Assert(aura_options.useCooldownViewer ~= nil, "useCooldownViewer toggle should be injected")
+    Harness.Assert(aura_options.cvLinkedSpells ~= nil, "cvLinkedSpells input should be injected")
 end)
 
 Harness.RunTest("2. Injected controls hidden property respects unit == player", function()
-    local dataPlayer = {
-        id = "AuraPlayer",
-        triggers = { [1] = { trigger = { type = "aura2", unit = "player" } } }
+    local playerData = {
+        triggers = {
+            [1] = { trigger = { type = "aura2", unit = "player", useCooldownViewer = true } }
+        }
     }
-    local dataTarget = {
-        id = "AuraTarget",
-        triggers = { [1] = { trigger = { type = "aura2", unit = "target" } } }
+    local targetData = {
+        triggers = {
+            [1] = { trigger = { type = "aura2", unit = "target", useCooldownViewer = true } }
+        }
     }
 
-    local optPlayer = OptionsPrivate.GetBuffTriggerOptions(dataPlayer, 1)["trigger.1.aura_options"]
-    local optTarget = OptionsPrivate.GetBuffTriggerOptions(dataTarget, 1)["trigger.1.aura_options"]
+    local playerOpts = OptionsPrivate.GetBuffTriggerOptions(playerData, 1)["trigger.1.aura_options"]
+    local targetOpts = OptionsPrivate.GetBuffTriggerOptions(targetData, 1)["trigger.1.aura_options"]
 
-    -- Hidden function should return false for player (visible) and true for target (hidden)
-    Harness.AssertEquals(optPlayer.useGroundTracking.hidden(), false, "Should be visible for unit = player")
-    Harness.AssertEquals(optTarget.useGroundTracking.hidden(), true, "Should be hidden for unit = target")
+    Harness.AssertEquals(playerOpts.useCooldownViewer.hidden(), false, "Player unit should NOT hide toggle")
+    Harness.AssertEquals(targetOpts.useCooldownViewer.hidden(), true, "Target unit SHOULD hide toggle")
 end)
 
-Harness.RunTest("3. Injected setter updates aura data and triggers ThisWeeksAuras.Add", function()
-    local dummyData = {
-        id = "ConsecrateAura_Test",
+Harness.RunTest("3. Injected setter updates trigger and linked spells", function()
+    local data = {
+        id = "MyConsecrationWA",
         triggers = {
             [1] = {
                 trigger = {
                     type = "aura2",
                     unit = "player",
-                    useGroundTracking = false,
-                    groundDuration = 12,
+                    spellId = 188370,
                 }
             }
         }
     }
 
-    local opt = OptionsPrivate.GetBuffTriggerOptions(dummyData, 1)["trigger.1.aura_options"]
+    local opts = OptionsPrivate.GetBuffTriggerOptions(data, 1)["trigger.1.aura_options"]
 
-    -- Call setter for useGroundTracking
-    opt.useGroundTracking.set({}, true)
-    Harness.AssertEquals(dummyData.triggers[1].trigger.useGroundTracking, true, "trigger.useGroundTracking should become true")
-    Harness.Assert(mockTWA.GetData("ConsecrateAura_Test") ~= nil, "ThisWeeksAuras.Add should have recorded the aura")
-    Harness.AssertEquals(mockTWA.optionsUpdatedId, "ConsecrateAura_Test", "ClearAndUpdateOptions should have been called")
+    -- Toggle useCooldownViewer
+    opts.useCooldownViewer.set({}, true)
+    Harness.AssertEquals(data.triggers[1].trigger.useCooldownViewer, true, "useCooldownViewer should be true")
 
-    -- Call setter for groundDuration
-    opt.groundDuration.set({}, 15)
-    Harness.AssertEquals(dummyData.triggers[1].trigger.groundDuration, 15, "trigger.groundDuration should become 15")
+    -- Set linked spell IDs
+    opts.cvLinkedSpells.set({}, "188370, 26573")
+    local linked = data.triggers[1].trigger.cvLinkedSpells
+    Harness.Assert(type(linked) == "table", "cvLinkedSpells should be table")
+    Harness.AssertEquals(linked[1], 188370, "First linked spell should be 188370")
+    Harness.AssertEquals(linked[2], 26573, "Second linked spell should be 26573")
 end)
 
-Harness.RunTest("4. SyncAuraState pushes dual-state into ThisWeeksAuras trigger state", function()
-    Harness.SetTime(1000.0)
-    M33K.Engine._SetExpiration(1010.0, 12.0, { name = "Consecration", icon = 135926 })
-    M33K.Engine._SetStandingInside(true)
+Harness.RunTest("4. SyncAuraState pushes Cooldown Viewer state into ThisWeeksAuras trigger state", function()
+    local auraId = "TestAura1"
+    local triggernum = 1
 
-    M33K.Injection.RegisterHookedAura("ConsecrateAura_Test", 1, 26573, 12)
-    M33K.Injection.SyncAuraState("ConsecrateAura_Test", 1, 26573, 12)
+    -- Setup active icon in BuffIconCooldownViewer
+    local mockIcon = {
+        spellID = 26573,
+        cooldownUseAuraDisplayTime = true,
+        cooldownExpirationTime = 1012.0,
+        cooldownDuration = 12.0,
+        IsShown = function() return true end,
+    }
+    _G.BuffIconCooldownViewer.itemFramePool._icons = { mockIcon }
 
-    local states = mockTWA.GetTriggerStateForTrigger("ConsecrateAura_Test", 1)
-    Harness.Assert(states[""] ~= nil, "State table should have entry for ''")
-    Harness.AssertEquals(states[""].show, true, "State show should be true")
-    Harness.AssertEquals(states[""].inside, true, "State inside should be true")
-    Harness.AssertEquals(states[""].duration, 12, "State duration should be 12")
-    Harness.Assert(mockTWA.updatedAuras["ConsecrateAura_Test"] == true, "UpdatedTriggerState should be called")
+    M33K.Injection.SyncAuraState(auraId, triggernum, { [188370] = true, [26573] = true })
+
+    local state = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)[""]
+    Harness.Assert(state ~= nil, "State should be populated")
+    Harness.AssertEquals(state.show, true, "State show should be true")
+    Harness.AssertEquals(state.expirationTime, 1012.0, "State expirationTime should be 1012.0")
+    Harness.AssertEquals(state.duration, 12.0, "State duration should be 12.0")
+
+    -- Clean up
+    _G.BuffIconCooldownViewer.itemFramePool._icons = {}
 end)

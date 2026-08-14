@@ -1,41 +1,28 @@
 local AddonName, M33K = ...
 M33K = M33K or _G.M33kAuraUtils or {}
 _G.M33kAuraUtils = M33K
-_G.M33K = M33K
 
-local frame = CreateFrame("Frame", "M33kAuraUtilsEventFrame")
+local EventFrame = CreateFrame and CreateFrame("Frame", "M33kAuraUtilsEventFrame") or nil
 
-frame:RegisterEvent("ADDON_LOADED")
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-frame:RegisterEvent("UNIT_AURA")
-frame:RegisterEvent("PLAYER_ENTERING_WORLD")
-
-frame:SetScript("OnEvent", function(self, event, ...)
-    if event == "ADDON_LOADED" then
-        local loadedAddon = ...
-        if loadedAddon == AddonName then
+local function OnEvent(self, event, arg1, ...)
+    if event == "ADDON_LOADED" and arg1 == AddonName then
+        if M33K.Database and M33K.Database.Initialize then
             M33K.Database.Initialize()
-            M33K.Options.Initialize()
         end
-
-    elseif event == "PLAYER_LOGIN" then
-        M33K.Engine.Initialize()
-        M33K.UI.CreateMainFrame()
-
-    elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        if CombatLogGetCurrentEventInfo then
-            local _, subEvent, _, sourceGUID, _, _, _, _, _, _, _, spellId = CombatLogGetCurrentEventInfo()
-            if subEvent == "SPELL_CAST_SUCCESS" then
-                M33K.Engine.OnSpellCastSuccess(sourceGUID, spellId)
-            end
+        if M33K.Engine and M33K.Engine.Initialize then
+            M33K.Engine.Initialize()
         end
-
-    elseif event == "UNIT_AURA" then
-        local unit = ...
-        M33K.Engine.OnUnitAura(unit)
-
-    elseif event == "PLAYER_ENTERING_WORLD" then
-        M33K.Engine.Reset()
+        if M33K.Injection and M33K.Injection.Initialize then
+            M33K.Injection.Initialize()
+        end
     end
-end)
+end
+
+if EventFrame then
+    EventFrame:RegisterEvent("ADDON_LOADED")
+    EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    EventFrame:RegisterEvent("UNIT_AURA")
+    EventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    EventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
+    EventFrame:SetScript("OnEvent", OnEvent)
+end

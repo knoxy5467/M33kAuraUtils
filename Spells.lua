@@ -5,93 +5,103 @@ _G.M33kAuraUtils = M33K
 M33K.Spells = {}
 local Spells = M33K.Spells
 
--- Built-in ground / in-zone spell definitions
-Spells.DefaultDatabase = {
-    -- Paladin: Consecration
-    [26573] = {
-        name = "Consecration",
-        castSpellId = 26573,
-        buffSpellId = 188370,
-        defaultDuration = 12,
-        class = "PALADIN",
-        icon = 135926,
-    },
-    -- Death Knight: Death and Decay
-    [43265] = {
-        name = "Death and Decay",
-        castSpellId = 43265,
-        buffSpellId = 188290,
-        defaultDuration = 10,
-        class = "DEATHKNIGHT",
-        icon = 136140,
-    },
-    -- Death Knight: Defile (Talent replacement for D&D)
-    [152280] = {
-        name = "Defile",
-        castSpellId = 152280,
-        buffSpellId = 391459,
-        defaultDuration = 10,
-        class = "DEATHKNIGHT",
-        icon = 136145,
-    },
-    -- Druid: Efflorescence
-    [145205] = {
-        name = "Efflorescence",
-        castSpellId = 145205,
-        buffSpellId = 145205,
-        defaultDuration = 30,
-        class = "DRUID",
-        icon = 134405,
-    },
-    -- Shaman: Healing Rain
-    [73920] = {
-        name = "Healing Rain",
-        castSpellId = 73920,
-        buffSpellId = 73920,
-        defaultDuration = 10,
-        class = "SHAMAN",
-        icon = 136037,
-    },
-    -- Demon Hunter: Sigil of Flame
-    [204596] = {
-        name = "Sigil of Flame",
-        castSpellId = 204596,
-        buffSpellId = nil, -- ground ticking zone
-        defaultDuration = 6,
-        class = "DEMONHUNTER",
-        icon = 1033479,
-    },
-}
+-- Spell information & cooldown manager utility helpers
+function Spells.GetSpellInfo(spellIdentifier)
+    if not spellIdentifier then return nil end
+    local spellId = tonumber(spellIdentifier)
 
-function Spells.GetSpellForClass(playerClass)
-    local results = {}
-    for spellId, data in pairs(Spells.DefaultDatabase) do
-        if not data.class or data.class == playerClass then
-            results[spellId] = data
+    if C_Spell and C_Spell.GetSpellInfo then
+        local info = C_Spell.GetSpellInfo(spellId or spellIdentifier)
+        if info then
+            return {
+                id = info.spellID,
+                name = info.name,
+                icon = info.iconID,
+                castTime = info.castTime,
+                minRange = info.minRange,
+                maxRange = info.maxRange,
+            }
+        end
+    elseif GetSpellInfo then
+        local name, _, icon, castTime, minRange, maxRange, id = GetSpellInfo(spellId or spellIdentifier)
+        if name then
+            return {
+                id = id or spellId,
+                name = name,
+                icon = icon,
+                castTime = castTime,
+                minRange = minRange,
+                maxRange = maxRange,
+            }
         end
     end
-    return results
+
+    return {
+        id = tonumber(spellIdentifier) or 0,
+        name = tostring(spellIdentifier),
+        icon = 136243, -- Default generic icon
+    }
 end
 
-function Spells.GetSpellByCastId(castSpellId, customSpells)
-    if customSpells and customSpells[castSpellId] then
-        return customSpells[castSpellId]
+function Spells.GetCooldown(spellIdentifier)
+    local spellId = tonumber(spellIdentifier)
+    if not spellId then
+        local info = Spells.GetSpellInfo(spellIdentifier)
+        spellId = info and info.id
     end
-    return Spells.DefaultDatabase[castSpellId]
+    if not spellId then return 0, 0, false end
+
+    if C_Spell and C_Spell.GetSpellCooldown then
+        local cd = C_Spell.GetSpellCooldown(spellId)
+        if cd then
+            return cd.startTime or 0, cd.duration or 0, cd.isEnabled or true, cd.modRate or 1.0
+        end
+    elseif GetSpellCooldown then
+        local start, duration, enabled, modRate = GetSpellCooldown(spellId)
+        return start or 0, duration or 0, enabled == 1, modRate or 1.0
+    end
+
+    return 0, 0, false
 end
 
-function Spells.GetSpellByBuffId(buffSpellId, customSpells)
-    if customSpells then
-        for _, data in pairs(customSpells) do
-            if data.buffSpellId == buffSpellId then
-                return data
-            end
+function Spells.GetCharges(spellIdentifier)
+    local spellId = tonumber(spellIdentifier)
+    if not spellId then
+        local info = Spells.GetSpellInfo(spellIdentifier)
+        spellId = info and info.id
+    end
+    if not spellId then return 0, 0, 0, 0 end
+
+    if C_Spell and C_Spell.GetSpellCharges then
+        local charges = C_Spell.GetSpellCharges(spellId)
+        if charges then
+            return charges.currentCharges or 0, charges.maxCharges or 0, charges.cooldownStartTime or 0, charges.cooldownDuration or 0
+        end
+    elseif GetSpellCharges then
+        local currentCharges, maxCharges, cooldownStart, cooldownDuration, chargeModRate = GetSpellCharges(spellId)
+        if currentCharges then
+            return currentCharges, maxCharges, cooldownStart, cooldownDuration
         end
     end
-    for _, data in pairs(Spells.DefaultDatabase) do
-        if data.buffSpellId == buffSpellId then
-            return data
-        end
+
+    return 0, 0, 0, 0
+end
+
+function Spells.IsUsable(spellIdentifier)
+    local spellId = tonumber(spellIdentifier)
+    if not spellId then
+        local info = Spells.GetSpellInfo(spellIdentifier)
+        spellId = info and info.id
     end
-    return nil
+    if not spellId then return false, false end
+
+    if C_Spell and C_Spell.IsSpellUsable then
+        local isUsable, notEnoughMana = C_Spell.IsSpellUsable(spellId)
+        return isUsable, notEnoughMana
+    elseif IsUsableSpell then
+        local isUsable, notEnoughMana = IsUsableSpell(spellId)
+        return isUsable, notEnoughMana
+    end
+
+    return true, false
 end

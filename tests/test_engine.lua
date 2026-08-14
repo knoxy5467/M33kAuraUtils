@@ -1,142 +1,120 @@
 local Harness = require("tests.test_harness")
 Harness.SetupEnvironment()
 
--- Initialize Addon State
 local M33K = {}
 Harness.LoadFullAddon(M33K)
+M33K.Engine.Initialize()
 
-Harness.BeginSuite("Dual-State Tracking Engine Tests")
+Harness.BeginSuite("Blizzard Cooldown Viewer & Aura Engine Tests")
 
-Harness.RunTest("1. Engine Initial State is EXPIRED", function()
-    Harness.SetTime(1000.0)
-    Harness.ClearPlayerAuras()
-    M33K.Engine.Initialize()
-    M33K.Engine._SetPlayerGUID("Player-1234")
-
-    local state, remaining, duration, spell = M33K.Engine.GetActiveState()
-    Harness.AssertEquals(state, M33K.Engine.STATE_EXPIRED, "Initial state should be EXPIRED")
-    Harness.AssertEquals(remaining, 0, "Remaining time should be 0")
+Harness.RunTest("1. IsBuffActive returns false when neither C_UnitAuras nor Cooldown Viewer matches", function()
+    local TARGET_SPELLS = { [188370] = true, [26573] = true }
+    local active, exp, dur = M33K.CooldownViewer.IsBuffActive(TARGET_SPELLS)
+    Harness.AssertEquals(active, false, "Should not be active with empty environment")
 end)
 
-Harness.RunTest("2. Cast Consecration transitions to ACTIVE_INSIDE", function()
-    Harness.SetTime(1000.0)
-    Harness.ClearPlayerAuras()
-    Harness.ApplyPlayerAura(188370, "Consecration") -- Buff active
-    M33K.Engine.Initialize()
-    M33K.Engine._SetPlayerGUID("Player-1234")
+Harness.RunTest("2. Direct C_UnitAuras match returns true", function()
+    -- Set active aura in C_UnitAuras
+    _G.C_UnitAuras._auras[188370] = {
+        duration = 12.0,
+        expirationTime = 1012.0,
+        icon = 135926,
+    }
 
-    -- Simulate SPELL_CAST_SUCCESS for Consecration (26573)
-    M33K.Engine.OnSpellCastSuccess("Player-1234", 26573)
+    local active, exp, dur = M33K.CooldownViewer.IsBuffActive({ [188370] = true, [26573] = true })
+    Harness.AssertEquals(active, true, "Should return true from C_UnitAuras")
+    Harness.AssertEquals(dur, 12.0, "Duration should match C_UnitAuras duration")
 
-    local state, remaining, duration, spell = M33K.Engine.GetActiveState()
-    Harness.AssertEquals(state, M33K.Engine.STATE_ACTIVE_INSIDE, "State should be ACTIVE_INSIDE")
-    Harness.AssertEquals(remaining, 12, "Remaining duration should be 12s")
-    Harness.AssertEquals(spell.name, "Consecration", "Active spell should be Consecration")
+    -- Clean up
+    _G.C_UnitAuras._auras[188370] = nil
 end)
 
-Harness.RunTest("3. Stepping out of Consecration transitions to ACTIVE_OUTSIDE", function()
-    Harness.SetTime(1000.0)
-    Harness.ApplyPlayerAura(188370, "Consecration")
-    M33K.Engine.Initialize()
-    M33K.Engine._SetPlayerGUID("Player-1234")
-    M33K.Engine.OnSpellCastSuccess("Player-1234", 26573)
+Harness.RunTest("3. Cooldown Viewer matches active icon with cooldownUseAuraDisplayTime == true", function()
+    -- Add an active icon to BuffIconCooldownViewer
+    local mockIcon = {
+        spellID = 26573,
+        cooldownUseAuraDisplayTime = true,
+        cooldownExpirationTime = 1010.0,
+        cooldownDuration = 10.0,
+        IsShown = function() return true end,
+    }
+    _G.BuffIconCooldownViewer.itemFramePool._icons = { mockIcon }
 
-    -- Advance time 3 seconds and drop buff
-    Harness.AdvanceTime(3.0)
-    Harness.RemovePlayerAura(188370)
-    M33K.Engine.OnUnitAura("player")
+    local active, exp, dur = M33K.CooldownViewer.IsBuffActive({ [188370] = true, [26573] = true })
+    Harness.AssertEquals(active, true, "Should return true from BuffIconCooldownViewer")
+    Harness.AssertEquals(dur, 10.0, "Duration should match Cooldown Viewer duration")
 
-    local state, remaining, duration, spell = M33K.Engine.GetActiveState()
-    Harness.AssertEquals(state, M33K.Engine.STATE_ACTIVE_OUTSIDE, "State should transition to ACTIVE_OUTSIDE")
-    Harness.AssertEquals(remaining, 9, "Remaining time should be 9s")
+    -- Clean up
+    _G.BuffIconCooldownViewer.itemFramePool._icons = {}
 end)
 
-Harness.RunTest("4. Stepping back into Consecration transitions back to ACTIVE_INSIDE", function()
-    Harness.SetTime(1000.0)
-    Harness.ApplyPlayerAura(188370, "Consecration")
-    M33K.Engine.Initialize()
-    M33K.Engine._SetPlayerGUID("Player-1234")
-    M33K.Engine.OnSpellCastSuccess("Player-1234", 26573)
+Harness.RunTest("4. Cooldown Viewer ignores icon when cooldownUseAuraDisplayTime is false (regular CD)", function()
+    -- Add a regular spell cooldown icon (not an active buff)
+    local mockIcon = {
+        spellID = 26573,
+        cooldownUseAuraDisplayTime = false, -- NOT an aura display
+        IsShown = function() return true end,
+    }
+    _G.EssentialCooldownViewer.itemFramePool._icons = { mockIcon }
 
-    -- Step out at +3s
-    Harness.AdvanceTime(3.0)
-    Harness.RemovePlayerAura(188370)
-    M33K.Engine.OnUnitAura("player")
+    local active = M33K.CooldownViewer.IsBuffActive({ [188370] = true, [26573] = true })
+    Harness.AssertEquals(active, false, "Should ignore icon when cooldownUseAuraDisplayTime is false")
 
-    -- Step back in at +5s
-    Harness.AdvanceTime(2.0)
-    Harness.ApplyPlayerAura(188370, "Consecration")
-    M33K.Engine.OnUnitAura("player")
-
-    local state, remaining, duration, spell = M33K.Engine.GetActiveState()
-    Harness.AssertEquals(state, M33K.Engine.STATE_ACTIVE_INSIDE, "State should return to ACTIVE_INSIDE")
-    Harness.AssertEquals(remaining, 7, "Remaining time should be 7s")
+    -- Clean up
+    _G.EssentialCooldownViewer.itemFramePool._icons = {}
 end)
 
-Harness.RunTest("5. Consecration Expiration when timer finishes", function()
-    Harness.SetTime(1000.0)
-    Harness.ApplyPlayerAura(188370, "Consecration")
-    M33K.Engine.Initialize()
-    M33K.Engine._SetPlayerGUID("Player-1234")
-    M33K.Engine.OnSpellCastSuccess("Player-1234", 26573)
+Harness.RunTest("5. Cooldown Viewer matches linkedSpellIDs from cooldownInfo", function()
+    local mockIcon = {
+        cooldownUseAuraDisplayTime = true,
+        IsShown = function() return true end,
+        cooldownInfo = {
+            spellID = 99999,
+            linkedSpellIDs = { 188370, 44444 },
+            cooldownDuration = 15.0,
+            cooldownExpirationTime = 1015.0,
+        },
+    }
+    _G.UtilityCooldownViewer.itemFramePool._icons = { mockIcon }
 
-    -- Advance past 12s
-    Harness.AdvanceTime(12.5)
-    Harness.RemovePlayerAura(188370)
-    M33K.Engine.OnUnitAura("player")
+    local active, exp, dur = M33K.CooldownViewer.IsBuffActive({ [188370] = true })
+    Harness.AssertEquals(active, true, "Should match via linkedSpellIDs table")
 
-    local state, remaining, duration, spell = M33K.Engine.GetActiveState()
-    Harness.AssertEquals(state, M33K.Engine.STATE_EXPIRED, "State should be EXPIRED")
-    Harness.AssertEquals(remaining, 0, "Remaining time should be 0")
+    -- Clean up
+    _G.UtilityCooldownViewer.itemFramePool._icons = {}
 end)
 
-Harness.RunTest("6. Premature recast resets ground duration", function()
-    Harness.SetTime(1000.0)
-    Harness.ApplyPlayerAura(188370, "Consecration")
-    M33K.Engine.Initialize()
-    M33K.Engine._SetPlayerGUID("Player-1234")
-    M33K.Engine.OnSpellCastSuccess("Player-1234", 26573)
+Harness.RunTest("6. Cooldown Viewer matches overrideSpellID via C_CooldownViewer fallback", function()
+    -- Icon has only a cooldownID (cid)
+    _G.C_CooldownViewer._cooldowns[42] = {
+        spellID = 11111,
+        overrideSpellID = 26573,
+        cooldownDuration = 8.0,
+        cooldownExpirationTime = 1008.0,
+    }
 
-    -- Recast at +8s
-    Harness.AdvanceTime(8.0)
-    M33K.Engine.OnSpellCastSuccess("Player-1234", 26573)
+    local mockIcon = {
+        cooldownID = 42,
+        cooldownUseAuraDisplayTime = true,
+        IsShown = function() return true end,
+    }
+    _G.BuffIconCooldownViewer.itemFramePool._icons = { mockIcon }
 
-    local state, remaining, duration, spell = M33K.Engine.GetActiveState()
-    Harness.AssertEquals(state, M33K.Engine.STATE_ACTIVE_INSIDE, "State should remain ACTIVE_INSIDE")
-    Harness.AssertEquals(remaining, 12, "Remaining time should reset to full 12s")
+    local active, exp, dur = M33K.CooldownViewer.IsBuffActive({ [26573] = true })
+    Harness.AssertEquals(active, true, "Should match via C_CooldownViewer overrideSpellID")
+
+    -- Clean up
+    _G.BuffIconCooldownViewer.itemFramePool._icons = {}
+    _G.C_CooldownViewer._cooldowns[42] = nil
 end)
 
-Harness.RunTest("7. Death Knight Death & Decay (43265) Support", function()
-    Harness.SetTime(2000.0)
-    Harness.ClearPlayerAuras()
-    Harness.ApplyPlayerAura(188290, "Death and Decay")
-    M33K.Engine.Initialize()
-    M33K.Engine._SetPlayerGUID("Player-1234")
+Harness.RunTest("7. Multiple target spell inputs supported (number, string, table)", function()
+    _G.C_UnitAuras._auras[777] = { duration = 5.0, expirationTime = 1005.0 }
 
-    M33K.Engine.OnSpellCastSuccess("Player-1234", 43265)
+    Harness.AssertEquals(M33K.CooldownViewer.IsBuffActive(777), true, "Direct number input")
+    Harness.AssertEquals(M33K.CooldownViewer.IsBuffActive("777"), true, "String number input")
+    Harness.AssertEquals(M33K.CooldownViewer.IsBuffActive({ 777, 888 }), true, "Array table input")
+    Harness.AssertEquals(M33K.CooldownViewer.IsBuffActive({ [777] = true }), true, "Set table input")
 
-    local state, remaining, duration, spell = M33K.Engine.GetActiveState()
-    Harness.AssertEquals(state, M33K.Engine.STATE_ACTIVE_INSIDE, "D&D should be ACTIVE_INSIDE")
-    Harness.AssertEquals(remaining, 10, "D&D duration should be 10s")
-    Harness.AssertEquals(spell.name, "Death and Decay", "Active spell is Death and Decay")
-end)
-
-Harness.RunTest("8. Callbacks trigger on state change", function()
-    Harness.SetTime(3000.0)
-    Harness.ClearPlayerAuras()
-    M33K.Engine.Initialize()
-    M33K.Engine._SetPlayerGUID("Player-1234")
-
-    local callbackReceived = false
-    local receivedState = nil
-    M33K.Engine.RegisterCallback("TestListener", function(state, remaining, duration, spell)
-        callbackReceived = true
-        receivedState = state
-    end)
-
-    Harness.ApplyPlayerAura(188370, "Consecration")
-    M33K.Engine.OnSpellCastSuccess("Player-1234", 26573)
-
-    Harness.Assert(callbackReceived, "Callback should have been invoked")
-    Harness.AssertEquals(receivedState, M33K.Engine.STATE_ACTIVE_INSIDE, "Callback received state ACTIVE_INSIDE")
+    _G.C_UnitAuras._auras[777] = nil
 end)
