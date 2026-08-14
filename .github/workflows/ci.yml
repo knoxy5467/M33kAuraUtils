@@ -1,0 +1,55 @@
+name: CI & Secret Testing
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: Run Unit Tests & Syntax Check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        luaVersion: [ "5.1", "luajit-2.1.0-beta3" ]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Lua ${{ matrix.luaVersion }}
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: ${{ matrix.luaVersion }}
+
+      - name: Run Master Test Runner
+        run: |
+          lua scripts/run_tests.lua
+
+  secret-access-verification:
+    name: Secret Access & Masking Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Lua 5.1
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+
+      - name: Verify Secret Access & Log Redaction
+        env:
+          CI_MOCK_SECRET: ${{ secrets.CI_SECRET_TEST_TOKEN || 'ghp_ci_synthetic_token_xyz987654321' }}
+        run: |
+          echo "Executing secret access security verification..."
+          lua -e '
+            package.path = package.path .. ";./?.lua;./tests/?.lua"
+            local Harness = require("tests.test_harness")
+            dofile("tests/test_secret_access.lua")
+            local passed, failed = Harness.GetSummary()
+            if failed > 0 then os.exit(1) else os.exit(0) end
+          '

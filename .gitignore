@@ -1,0 +1,31 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor
+.vscode/
+.idea/
+*.suo
+*.user
+*.sublime-workspace
+*.sublime-project
+
+# Environment & Secrets
+.env
+.env.*
+*.secret
+*.key
+*.pem
+
+# Build artifacts & temp
+*.tmp
+*.log
+dist/
+build/
+bin/
+
+# Local testing
+.luacov
+luacov.report.out
+luacov.stats.out
