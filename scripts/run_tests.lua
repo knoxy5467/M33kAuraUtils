@@ -1,5 +1,5 @@
--- scripts/run_tests.lua: Master Test Runner and CI Simulation
-package.path = package.path .. ";./?.lua;./tests/?.lua;./Locales/?.lua"
+-- scripts/run_tests.lua: Master Test Runner, CI Simulation, and Distribution Deployer
+package.path = package.path .. ";./?.lua;./tests/?.lua;./Locales/?.lua;./scripts/?.lua"
 
 print("==========================================================")
 print("       GroundAuraTracker Local Build & Test Runner        ")
@@ -9,7 +9,7 @@ local totalPassed = 0
 local totalFailed = 0
 
 -- 1. Validate TOC References
-print("\n[STEP 1/3] Validating TOC File & Asset References...")
+print("\n[STEP 1/4] Validating TOC File & Asset References...")
 local tocFile = io.open("GroundAuraTracker.toc", "r")
 if not tocFile then
     print("  [FAIL] GroundAuraTracker.toc not found!")
@@ -48,7 +48,7 @@ else
 end
 
 -- 2. Syntax Check All Lua Files
-print("\n[STEP 2/3] Checking Lua Syntax Across Codebase...")
+print("\n[STEP 2/4] Checking Lua Syntax Across Codebase...")
 local luaFiles = {
     "Locales/Locales.lua",
     "Spells.lua",
@@ -58,6 +58,7 @@ local luaFiles = {
     "Options.lua",
     "Injection.lua",
     "Core.lua",
+    "scripts/deploy.lua",
     "tests/test_harness.lua",
     "tests/test_engine.lua",
     "tests/test_database.lua",
@@ -85,7 +86,7 @@ else
 end
 
 -- 3. Execute Test Suites
-print("\n[STEP 3/3] Executing Unit Test Suites...")
+print("\n[STEP 3/4] Executing Unit Test Suites...")
 
 local Harness = require("tests.test_harness")
 
@@ -113,7 +114,14 @@ print("==========================================================")
 if failed > 0 then
     print("❌ Build Status: FAILED")
     os.exit(1)
-else
-    print("✅ Build Status: SUCCESS - All tests and validations passed!")
-    os.exit(0)
 end
+
+-- 4. Deploy Distribution Files to WoW AddOns Directory
+print("\n[STEP 4/4] Deploying Distribution Files to WoW AddOns...")
+local Deployer = require("scripts.deploy")
+Deployer.Deploy()
+
+print("\n==========================================================")
+print("✅ Build & Deploy Status: SUCCESS")
+print("==========================================================")
+os.exit(0)
