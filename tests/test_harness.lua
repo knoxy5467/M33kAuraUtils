@@ -27,13 +27,32 @@ function Harness.SetupEnvironment()
         end,
     }
 
-    -- Mock C_CooldownViewer
+    -- Mock Enum.CooldownViewerCategory
+    _G.Enum = _G.Enum or {}
+    _G.Enum.CooldownViewerCategory = {
+        Essential = 1,
+        Utility = 2,
+    }
+
+    -- Mock C_CooldownViewer (with GetCooldownViewerCategorySet)
     _G.C_CooldownViewer = {
         _cooldowns = {},
+        _categorySets = {
+            [1] = {},  -- Essential cooldown IDs
+            [2] = {},  -- Utility cooldown IDs
+        },
         GetCooldownViewerCooldownInfo = function(cid)
             return _G.C_CooldownViewer._cooldowns[cid]
         end,
+        GetCooldownViewerCategorySet = function(category, includeAll)
+            return _G.C_CooldownViewer._categorySets[category] or {}
+        end,
     }
+
+    -- Mock canaccessvalue (all values accessible in test)
+    _G.canaccessvalue = function(val)
+        return true
+    end
 
     -- Helper to create a viewer with an itemFramePool
     local function CreateMockViewer(name)
