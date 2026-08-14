@@ -1,5 +1,5 @@
 @echo off
-REM scripts/test.bat: Run GroundAuraTracker local tests
+REM scripts/test.bat: Run GroundAuraTracker native Lua tests
 cd /d "%~dp0\.."
 
 where lua >nul 2>nul
@@ -14,11 +14,6 @@ if %ERRORLEVEL% equ 0 (
     exit /b %ERRORLEVEL%
 )
 
-where python >nul 2>nul
-if %ERRORLEVEL% equ 0 (
-    python scripts\run_tests.py
-    exit /b %ERRORLEVEL%
-)
-
-echo [ERROR] No Lua or Python interpreter found in PATH.
+echo [ERROR] Native Lua executable ('lua' or 'luajit') was not found in PATH.
+echo Please install Lua (e.g., winget install DEVCOM.Lua).
 exit /b 1
