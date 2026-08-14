@@ -4,6 +4,7 @@
 ## Author: GroundAuraTracker Team
 ## Version: 1.0.0
 ## SavedVariables: GroundAuraTrackerDB
+## OptionalDeps: ThisWeeksAuras, WeakAuras
 ## IconTexture: Interface\Icons\Spell_Holy_InnerFire
 ## X-Category: Combat
 ## X-License: MIT
@@ -15,4 +16,5 @@ Database.lua
 Engine.lua
 UI.lua
 Options.lua
+Injection.lua
 Core.lua

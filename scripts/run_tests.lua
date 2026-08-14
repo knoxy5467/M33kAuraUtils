@@ -1,5 +1,5 @@
 -- scripts/run_tests.lua: Master Test Runner and CI Simulation
-package.path = package.path .. ";./?.lua;./tests/?.lua"
+package.path = package.path .. ";./?.lua;./tests/?.lua;./Locales/?.lua"
 
 print("==========================================================")
 print("       GroundAuraTracker Local Build & Test Runner        ")
@@ -15,10 +15,8 @@ if not tocFile then
     print("  [FAIL] GroundAuraTracker.toc not found!")
     os.exit(1)
 else
-    local tocLines = 0
     local referencedFiles = {}
     for line in tocFile:lines() do
-        tocLines = tocLines + 1
         -- Strip comments and whitespace
         local cleanLine = string.gsub(line, "#.*$", "")
         cleanLine = string.gsub(cleanLine, "^%s*(.-)%s*$", "%1")
@@ -30,7 +28,6 @@ else
 
     local missingFiles = 0
     for _, path in ipairs(referencedFiles) do
-        -- Normalize windows slashes
         local normPath = string.gsub(path, "\\", "/")
         local f = io.open(normPath, "r")
         if f then
@@ -59,10 +56,13 @@ local luaFiles = {
     "Engine.lua",
     "UI.lua",
     "Options.lua",
+    "Injection.lua",
     "Core.lua",
     "tests/test_harness.lua",
     "tests/test_engine.lua",
     "tests/test_database.lua",
+    "tests/test_ui.lua",
+    "tests/test_injection.lua",
     "tests/test_secret_access.lua",
 }
 
@@ -95,7 +95,13 @@ dofile("tests/test_engine.lua")
 -- Suite 2: Database Tests
 dofile("tests/test_database.lua")
 
--- Suite 3: Secret Access Tests
+-- Suite 3: UI & Visual Handler Tests
+dofile("tests/test_ui.lua")
+
+-- Suite 4: Cross-Addon Injection & Hook Tests
+dofile("tests/test_injection.lua")
+
+-- Suite 5: Secret Access Tests
 dofile("tests/test_secret_access.lua")
 
 local passed, failed = Harness.GetSummary()
