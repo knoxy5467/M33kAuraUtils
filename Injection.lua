@@ -61,6 +61,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 name = "Linked Spell IDs",
                 desc = "Comma-separated list of spell IDs to match in Cooldown Viewer (e.g. 188370, 26573).",
                 order = 50.2,
+                width = WA and WA.normalWidth or 1,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
                 end,
@@ -78,6 +79,116 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                     trigger.cvLinkedSpells = list
                     if WA and WA.Add then
                         WA.Add(data)
+                    end
+                end,
+            }
+
+            -- Dropdown: Pick from active Cooldown Manager entries
+            aura_options.cvPickerDropdown = {
+                type = "select",
+                name = "Select from Cooldown Manager",
+                desc = "Shows spells currently tracked by the Blizzard Cooldown Manager. Select one to add it to Linked Spell IDs.",
+                order = 50.3,
+                width = WA and WA.normalWidth or 1,
+                hidden = function()
+                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
+                end,
+                values = function()
+                    local vals = { ["0"] = "|cFF888888-- Select a spell --|r" }
+                    if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateTracked then
+                        local tracked = M33K.CooldownViewer.EnumerateTracked()
+                        for spellID, entry in pairs(tracked) do
+                            local label = entry.name or ("Spell " .. spellID)
+                            local iconStr = ""
+                            if entry.icon and entry.icon ~= 136243 then
+                                iconStr = "|T" .. entry.icon .. ":0|t "
+                            end
+                            local buffTag = entry.isBuffTimer and " |cFF00FF00[Buff]|r" or " |cFFFFFF00[CD]|r"
+                            local viewerTag = ""
+                            if entry.viewerName then
+                                local short = entry.viewerName:gsub("CooldownViewer$", "")
+                                viewerTag = " |cFF888888(" .. short .. ")|r"
+                            end
+                            vals[tostring(spellID)] = iconStr .. label .. " (" .. spellID .. ")" .. buffTag .. viewerTag
+                        end
+                    end
+                    return vals
+                end,
+                get = function()
+                    return trigger._cvPickerSelection or "0"
+                end,
+                set = function(info, v)
+                    trigger._cvPickerSelection = v
+                end,
+            }
+
+            -- Button: Add selected spell from the picker to linked spells
+            aura_options.cvPickerAdd = {
+                type = "execute",
+                name = "Add Selected Spell",
+                desc = "Adds the spell selected above to the Linked Spell IDs list.",
+                order = 50.4,
+                width = WA and WA.normalWidth or 1,
+                hidden = function()
+                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
+                end,
+                func = function()
+                    local sel = tonumber(trigger._cvPickerSelection)
+                    if not sel or sel == 0 then return end
+
+                    if type(trigger.cvLinkedSpells) ~= "table" then
+                        trigger.cvLinkedSpells = {}
+                    end
+
+                    -- Don't add duplicates
+                    for _, existing in ipairs(trigger.cvLinkedSpells) do
+                        if existing == sel then return end
+                    end
+
+                    table.insert(trigger.cvLinkedSpells, sel)
+
+                    -- Also add linked/override IDs from the cooldown viewer entry
+                    if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateTracked then
+                        local tracked = M33K.CooldownViewer.EnumerateTracked()
+                        local entry = tracked[sel]
+                        if entry and type(entry.linkedSpellIDs) == "table" then
+                            for _, lid in ipairs(entry.linkedSpellIDs) do
+                                local isDup = false
+                                for _, existing in ipairs(trigger.cvLinkedSpells) do
+                                    if existing == lid then isDup = true; break end
+                                end
+                                if not isDup then
+                                    table.insert(trigger.cvLinkedSpells, lid)
+                                end
+                            end
+                        end
+                    end
+
+                    trigger._cvPickerSelection = "0"
+
+                    if WA and WA.Add then
+                        WA.Add(data)
+                    end
+                    if WA and WA.ClearAndUpdateOptions then
+                        WA.ClearAndUpdateOptions(data.id)
+                    end
+                end,
+            }
+
+            -- Button: Refresh the cooldown viewer list
+            aura_options.cvPickerRefresh = {
+                type = "execute",
+                name = "|cFF00B4FFRefresh Cooldown Manager List|r",
+                desc = "Re-scans the Blizzard Cooldown Viewers for currently tracked spells.",
+                order = 50.5,
+                width = WA and WA.normalWidth or 1,
+                hidden = function()
+                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
+                end,
+                func = function()
+                    -- Just forces the options panel to redraw, which re-calls values()
+                    if WA and WA.ClearAndUpdateOptions then
+                        WA.ClearAndUpdateOptions(data.id)
                     end
                 end,
             }

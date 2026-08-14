@@ -102,9 +102,78 @@ function CDViewer.IsBuffActive(targetSpells)
     return false, 0, 0, nil
 end
 
+-- Enumerate all spells currently tracked by Blizzard Cooldown Viewers
+-- Returns: { [spellID] = { name, icon, viewerName, isBuffTimer, linkedSpellIDs } }
+function CDViewer.EnumerateTracked()
+    local tracked = {}
+
+    for _, viewerName in ipairs(VIEWERS) do
+        local viewer = _G[viewerName]
+        if viewer and viewer.itemFramePool and type(viewer.itemFramePool.EnumerateActive) == "function" then
+            for icon in viewer.itemFramePool:EnumerateActive() do
+                if icon and (not icon.IsShown or icon:IsShown()) then
+                    local info = icon.cooldownInfo
+                    local cid = icon.cooldownID
+
+                    if not info and cid and not (issecretvalue and issecretvalue(cid))
+                       and C_CooldownViewer and type(C_CooldownViewer.GetCooldownViewerCooldownInfo) == "function" then
+                        local ok, cdInfo = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cid)
+                        if ok and type(cdInfo) == "table" then
+                            info = cdInfo
+                        end
+                    end
+
+                    local spellID = type(icon.spellID) == "number" and icon.spellID
+                                 or (info and info.spellID)
+                    local isBuffTimer = (icon.cooldownUseAuraDisplayTime == true)
+
+                    if spellID then
+                        -- Resolve spell name and icon texture
+                        local spellName, spellIcon
+                        if M33K.Spells and M33K.Spells.GetSpellInfo then
+                            local si = M33K.Spells.GetSpellInfo(spellID)
+                            spellName = si and si.name
+                            spellIcon = si and si.icon
+                        end
+                        if not spellIcon and icon.icon and icon.icon.GetTexture then
+                            spellIcon = icon.icon:GetTexture()
+                        end
+
+                        local linkedIDs = {}
+                        if info then
+                            if info.overrideSpellID then
+                                linkedIDs[#linkedIDs + 1] = info.overrideSpellID
+                            end
+                            if info.overrideTooltipSpellID then
+                                linkedIDs[#linkedIDs + 1] = info.overrideTooltipSpellID
+                            end
+                            if type(info.linkedSpellIDs) == "table" then
+                                for _, lid in ipairs(info.linkedSpellIDs) do
+                                    linkedIDs[#linkedIDs + 1] = lid
+                                end
+                            end
+                        end
+
+                        tracked[spellID] = {
+                            name = spellName or ("Spell " .. spellID),
+                            icon = spellIcon or 136243,
+                            viewerName = viewerName,
+                            isBuffTimer = isBuffTimer,
+                            linkedSpellIDs = linkedIDs,
+                        }
+                    end
+                end
+            end
+        end
+    end
+
+    return tracked
+end
+
 -- Global helper export for WeakAuras / Custom triggers
 _G.M33kAuraUtils.IsBuffActive = CDViewer.IsBuffActive
 _G.M33kAuraUtils.IsCooldownViewerBuffActive = CDViewer.IsBuffActive
+_G.M33kAuraUtils.EnumerateTracked = CDViewer.EnumerateTracked
 
 -- Engine wrapper for lifecycle events and callback subscriptions
 M33K.Engine = {}
