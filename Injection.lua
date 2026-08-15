@@ -210,29 +210,15 @@ function Injection.WrapBuffTriggerOptions(origFunc)
 
                 local sel = tonumber(trigger._cvPickBuffOrBar)
                 if sel and sel ~= 0 then
+                    -- Only add the selected spell ID. IsBuffActive already resolves
+                    -- overrideSpellID, overrideTooltipSpellID, and linkedSpellIDs
+                    -- internally, so pre-expanding them here causes duplicate entries.
                     local isDup = false
                     for _, existing in ipairs(trigger.cvLinkedSpells) do
                         if existing == sel then isDup = true; break end
                     end
                     if not isDup then
                         table.insert(trigger.cvLinkedSpells, sel)
-                    end
-
-                    -- Auto-add linked/override IDs from CDM entry
-                    if M33K.CooldownViewer then
-                        local all = M33K.CooldownViewer.EnumerateAll()
-                        local entry = all[sel]
-                        if entry and type(entry.linkedSpellIDs) == "table" then
-                            for _, lid in ipairs(entry.linkedSpellIDs) do
-                                local lidDup = false
-                                for _, existing in ipairs(trigger.cvLinkedSpells) do
-                                    if existing == lid then lidDup = true; break end
-                                end
-                                if not lidDup then
-                                    table.insert(trigger.cvLinkedSpells, lid)
-                                end
-                            end
-                        end
                     end
 
                     trigger._cvPickBuffOrBar = "0"
@@ -405,29 +391,14 @@ function Injection.WrapSpellTriggerOptions(origFunc)
                         trigger.cvLinkedSpells = {}
                     end
 
+                    -- Only add the selected spell ID. IsSpellUsable already resolves
+                    -- overrideSpellID and linkedSpellIDs internally at match time.
                     local isDup = false
                     for _, existing in ipairs(trigger.cvLinkedSpells) do
                         if existing == sel then isDup = true; break end
                     end
                     if not isDup then
                         table.insert(trigger.cvLinkedSpells, sel)
-                    end
-
-                    -- Auto-add linked/override IDs
-                    if M33K.CooldownViewer then
-                        local all = M33K.CooldownViewer.EnumerateAll()
-                        local entry = all[sel]
-                        if entry and type(entry.linkedSpellIDs) == "table" then
-                            for _, lid in ipairs(entry.linkedSpellIDs) do
-                                local lidDup = false
-                                for _, existing in ipairs(trigger.cvLinkedSpells) do
-                                    if existing == lid then lidDup = true; break end
-                                end
-                                if not lidDup then
-                                    table.insert(trigger.cvLinkedSpells, lid)
-                                end
-                            end
-                        end
                     end
 
                     trigger._cvPickCooldown = "0"
