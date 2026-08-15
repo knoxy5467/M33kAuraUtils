@@ -57,6 +57,7 @@ local luaFiles = {
     "UI.lua",
     "Options.lua",
     "Injection.lua",
+    "IntegTest.lua",
     "Core.lua",
     "scripts/deploy.lua",
     "tests/test_harness.lua",
@@ -64,6 +65,7 @@ local luaFiles = {
     "tests/test_database.lua",
     "tests/test_ui.lua",
     "tests/test_injection.lua",
+    "tests/test_integ_runner.lua",
     "tests/test_secret_access.lua",
 }
 
@@ -102,7 +104,10 @@ dofile("tests/test_ui.lua")
 -- Suite 4: Cross-Addon Injection & Hook Tests
 dofile("tests/test_injection.lua")
 
--- Suite 5: Secret Access Tests
+-- Suite 5: In-Client Integration Test Runner Tests
+dofile("tests/test_integ_runner.lua")
+
+-- Suite 6: Secret Access Tests
 dofile("tests/test_secret_access.lua")
 
 local passed, failed = Harness.GetSummary()

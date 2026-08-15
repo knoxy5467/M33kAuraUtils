@@ -18,4 +18,5 @@ Engine.lua
 UI.lua
 Options.lua
 Injection.lua
+IntegTest.lua
 Core.lua

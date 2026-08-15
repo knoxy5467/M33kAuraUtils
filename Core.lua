@@ -16,14 +16,23 @@ local function OnEvent(self, event, arg1, ...)
             if M33K.Injection and M33K.Injection.Initialize then
                 M33K.Injection.Initialize()
             end
+            if M33K.IntegTest and M33K.IntegTest.InitializeSlashHooks then
+                M33K.IntegTest.InitializeSlashHooks()
+            end
         elseif arg1 == "ThisWeeksAurasOptions" or arg1 == "WeakAurasOptions" or arg1 == "M33kAurasOptions" or arg1 == "ThisWeeksAuras" or arg1 == "WeakAuras" or arg1 == "M33kAuras" then
             if M33K.Injection and M33K.Injection.Initialize then
                 M33K.Injection.Initialize()
+            end
+            if M33K.IntegTest and M33K.IntegTest.InitializeSlashHooks then
+                M33K.IntegTest.InitializeSlashHooks()
             end
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         if M33K.Injection and M33K.Injection.Initialize then
             M33K.Injection.Initialize()
+        end
+        if M33K.IntegTest and M33K.IntegTest.InitializeSlashHooks then
+            M33K.IntegTest.InitializeSlashHooks()
         end
     end
 end

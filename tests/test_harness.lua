@@ -314,6 +314,7 @@ function Harness.LoadFullAddon(M33K)
     dofile("UI.lua")
     dofile("Options.lua")
     dofile("Injection.lua")
+    dofile("IntegTest.lua")
     dofile("Core.lua")
     return M33K
 end

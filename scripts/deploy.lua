@@ -75,6 +75,7 @@ function Deployer.Deploy(customPath)
         { src = "UI.lua", dst = targetAddonDir .. "/UI.lua" },
         { src = "Options.lua", dst = targetAddonDir .. "/Options.lua" },
         { src = "Injection.lua", dst = targetAddonDir .. "/Injection.lua" },
+        { src = "IntegTest.lua", dst = targetAddonDir .. "/IntegTest.lua" },
         { src = "Core.lua", dst = targetAddonDir .. "/Core.lua" },
         { src = "Media/logo.jpg", dst = targetAddonDir .. "/Media/logo.jpg" },
     }
