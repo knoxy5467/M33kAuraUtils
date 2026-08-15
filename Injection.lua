@@ -13,8 +13,8 @@ local function GetAuraFramework()
 end
 
 -- Build dropdown values from a tracked entries table
-local function BuildDropdownValues(tracked)
-    local vals = { ["0"] = "-- Select a spell --" }
+local function BuildDropdownValues(tracked, defaultLabel)
+    local vals = { ["0"] = defaultLabel or "-- Select a spell --" }
     if not tracked then return vals end
 
     for spellID, entry in pairs(tracked) do
@@ -25,8 +25,10 @@ local function BuildDropdownValues(tracked)
         end
         local catTag = ""
         if entry.category then
-            if entry.category == "Buff" then
-                catTag = " |cFF00FF00[Buff]|r"
+            if entry.category == "TrackedBuff" or entry.category == "Buff" then
+                catTag = " |cFF00FF00[Tracked Buff]|r"
+            elseif entry.category == "TrackedBar" or entry.category == "Bar" then
+                catTag = " |cFF00FFFF[Tracked Bar]|r"
             elseif entry.category == "Essential" then
                 catTag = " |cFFFF6600[Essential]|r"
             elseif entry.category == "Utility" then
@@ -54,7 +56,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
             -- Inject Cooldown Viewer Header
             aura_options.cvHeader = {
                 type = "header",
-                name = "|cFF00B4FFCooldown Viewer Tracking (M33kAuraUtils)|r",
+                name = "|cFF00B4FFBlizzard Cooldown Manager Tracking (M33kAuraUtils)|r",
                 order = 50.0,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player")
@@ -65,7 +67,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
             aura_options.useCooldownViewer = {
                 type = "toggle",
                 name = "Enable Cooldown Viewer Tracking",
-                desc = "Tracks active buff timers through Blizzard Cooldown Viewers and C_UnitAuras.",
+                desc = "Tracks active buff and cooldown timers through Blizzard Cooldown Viewers (BuffIcon, BuffBar, Essential, Utility) and C_UnitAuras.",
                 order = 50.1,
                 width = dw,
                 hidden = function()
@@ -83,7 +85,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
             aura_options.cvLinkedSpells = {
                 type = "input",
                 name = "Linked Spell IDs",
-                desc = "Comma-separated list of spell IDs to match (e.g. 188370, 26573).",
+                desc = "Comma-separated list of spell IDs to match in Cooldown Manager (e.g. 188370, 26573).",
                 order = 50.2,
                 width = dw,
                 hidden = function()
@@ -105,83 +107,52 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 end,
             }
 
-            -- Dropdown: Buffs only (from BuffIconCooldownViewer, filtered to buff timers)
-            aura_options.cvPickerBuffs = {
+            -- Dropdown 1: Tracked Buffs & Tracked Bars
+            aura_options.cvPickerBuffsAndBars = {
                 type = "select",
-                name = "Buffs",
-                desc = "Active buff timers from the Blizzard Cooldown Manager.",
+                name = "Tracked Buffs & Bars",
+                desc = "Buffs and bars configured in the Blizzard Cooldown Manager.",
                 order = 50.3,
                 width = dw,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
                 end,
                 values = function()
-                    if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateTracked then
-                        return BuildDropdownValues(M33K.CooldownViewer.EnumerateTracked("Buff", true))
+                    if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateTrackedBuffsAndBars then
+                        return BuildDropdownValues(M33K.CooldownViewer.EnumerateTrackedBuffsAndBars(), "-- Select Tracked Buff or Bar --")
                     end
-                    return { ["0"] = "-- No buffs found --" }
+                    return { ["0"] = "-- No tracked buffs/bars found --" }
                 end,
-                get = function() return trigger._cvPickBuff or "0" end,
-                set = function(info, v) trigger._cvPickBuff = v end,
+                get = function() return trigger._cvPickBuffOrBar or "0" end,
+                set = function(info, v) trigger._cvPickBuffOrBar = v end,
             }
 
-            -- Dropdown: Essential Cooldowns (from CDM data layer)
-            aura_options.cvPickerEssential = {
+            -- Dropdown 2: Combined Essential & Utility Cooldowns
+            aura_options.cvPickerCooldowns = {
                 type = "select",
-                name = "Essential Cooldowns",
-                desc = "Essential cooldowns from the Blizzard Cooldown Manager.",
+                name = "Essential & Utility Cooldowns",
+                desc = "Essential and utility cooldowns configured in the Blizzard Cooldown Manager.",
                 order = 50.4,
                 width = dw,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
                 end,
                 values = function()
-                    if M33K.CooldownViewer then
-                        -- Merge live viewer icons + CDM data layer
-                        local merged = {}
-                        local fromViewer = M33K.CooldownViewer.EnumerateTracked("Essential", false)
-                        for k, v in pairs(fromViewer) do merged[k] = v end
-                        local fromCDM = M33K.CooldownViewer.EnumerateFromCDM("Essential")
-                        for k, v in pairs(fromCDM) do if not merged[k] then merged[k] = v end end
-                        return BuildDropdownValues(merged)
+                    if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateCooldowns then
+                        return BuildDropdownValues(M33K.CooldownViewer.EnumerateCooldowns(), "-- Select Cooldown --")
                     end
-                    return { ["0"] = "-- No essentials found --" }
+                    return { ["0"] = "-- No cooldowns found --" }
                 end,
-                get = function() return trigger._cvPickEssential or "0" end,
-                set = function(info, v) trigger._cvPickEssential = v end,
+                get = function() return trigger._cvPickCooldown or "0" end,
+                set = function(info, v) trigger._cvPickCooldown = v end,
             }
 
-            -- Dropdown: Utility Cooldowns (from CDM data layer)
-            aura_options.cvPickerUtility = {
-                type = "select",
-                name = "Utility Cooldowns",
-                desc = "Utility cooldowns from the Blizzard Cooldown Manager.",
-                order = 50.5,
-                width = dw,
-                hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
-                end,
-                values = function()
-                    if M33K.CooldownViewer then
-                        local merged = {}
-                        local fromViewer = M33K.CooldownViewer.EnumerateTracked("Utility", false)
-                        for k, v in pairs(fromViewer) do merged[k] = v end
-                        local fromCDM = M33K.CooldownViewer.EnumerateFromCDM("Utility")
-                        for k, v in pairs(fromCDM) do if not merged[k] then merged[k] = v end end
-                        return BuildDropdownValues(merged)
-                    end
-                    return { ["0"] = "-- No utilities found --" }
-                end,
-                get = function() return trigger._cvPickUtility or "0" end,
-                set = function(info, v) trigger._cvPickUtility = v end,
-            }
-
-            -- Button: Add selected spell(s) from any picker
+            -- Button: Add Selected Spell
             aura_options.cvPickerAdd = {
                 type = "execute",
                 name = "Add Selected",
                 desc = "Adds the spell selected in any dropdown above to the Linked Spell IDs list.",
-                order = 50.6,
+                order = 50.5,
                 width = dw,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
@@ -191,17 +162,15 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                         trigger.cvLinkedSpells = {}
                     end
 
-                    -- Collect selections from all three pickers
-                    local selections = {
-                        tonumber(trigger._cvPickBuff),
-                        tonumber(trigger._cvPickEssential),
-                        tonumber(trigger._cvPickUtility),
-                    }
+                    local selections = {}
+                    local selBuff = tonumber(trigger._cvPickBuffOrBar)
+                    local selCD = tonumber(trigger._cvPickCooldown)
+                    if selBuff and selBuff ~= 0 then table.insert(selections, selBuff) end
+                    if selCD and selCD ~= 0 then table.insert(selections, selCD) end
 
                     local added = false
                     for _, sel in ipairs(selections) do
                         if sel and sel ~= 0 then
-                            -- Don't add duplicates
                             local isDup = false
                             for _, existing in ipairs(trigger.cvLinkedSpells) do
                                 if existing == sel then isDup = true; break end
@@ -211,7 +180,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                                 added = true
                             end
 
-                            -- Auto-add linked/override IDs
+                            -- Auto-add linked/override IDs from CDM entry
                             if M33K.CooldownViewer then
                                 local all = M33K.CooldownViewer.EnumerateAll()
                                 local entry = all[sel]
@@ -230,10 +199,8 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                         end
                     end
 
-                    -- Reset picker selections
-                    trigger._cvPickBuff = "0"
-                    trigger._cvPickEssential = "0"
-                    trigger._cvPickUtility = "0"
+                    trigger._cvPickBuffOrBar = "0"
+                    trigger._cvPickCooldown = "0"
 
                     if added and WA then
                         if WA.Add then WA.Add(data) end
@@ -242,12 +209,12 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 end,
             }
 
-            -- Button: Refresh all lists
+            -- Button: Refresh Lists
             aura_options.cvPickerRefresh = {
                 type = "execute",
                 name = "|cFF00B4FFRefresh Lists|r",
                 desc = "Re-scans the Blizzard Cooldown Manager for all categories.",
-                order = 50.7,
+                order = 50.6,
                 width = dw,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
@@ -284,16 +251,27 @@ function Injection.SyncAuraState(auraId, triggernum, targetSpells)
     local allStates = WA.GetTriggerStateForTrigger(auraId, triggernum)
     if not allStates then return end
 
-    local active, exp, dur, icon = M33K.CooldownViewer.IsBuffActive(targetSpells)
+    local active, exp, dur, icon, stacks, matchedID, name = M33K.CooldownViewer.IsBuffActive(targetSpells)
 
     if active then
+        local now = GetTime and GetTime() or 0
+        local rem = (exp and exp > 0) and math.max(0, exp - now) or 0
+
         allStates[""] = {
             show = true,
             changed = true,
             progressType = "timed",
             duration = dur or 0,
             expirationTime = exp or 0,
+            total = dur or 0,
+            remaining = rem,
             icon = icon or 136243,
+            stacks = stacks or 0,
+            applications = stacks or 0,
+            charges = stacks or 0,
+            value = stacks or 0,
+            spellId = matchedID,
+            name = name or ("Spell " .. (matchedID or 0)),
         }
     else
         allStates[""] = {

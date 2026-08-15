@@ -16,12 +16,53 @@ function Harness.SetupEnvironment()
         return currentTime
     end
 
+    -- Mock C_Spell
+    _G.C_Spell = {
+        _spells = {},
+        _charges = {},
+        _cooldowns = {},
+        GetSpellInfo = function(spellId)
+            local id = tonumber(spellId)
+            if _G.C_Spell._spells[id] then
+                return _G.C_Spell._spells[id]
+            end
+            if id then
+                return { spellID = id, name = "Spell " .. id, iconID = 136243 }
+            end
+            return nil
+        end,
+        GetSpellCharges = function(spellId)
+            local id = tonumber(spellId)
+            if _G.C_Spell._charges[id] then
+                return _G.C_Spell._charges[id]
+            end
+            return nil
+        end,
+        GetSpellCooldown = function(spellId)
+            local id = tonumber(spellId)
+            if _G.C_Spell._cooldowns[id] then
+                return _G.C_Spell._cooldowns[id]
+            end
+            return { startTime = 0, duration = 0, isEnabled = true, modRate = 1.0 }
+        end,
+        IsSpellUsable = function(spellId)
+            return true, false
+        end,
+    }
+
     -- Mock C_UnitAuras
     _G.C_UnitAuras = {
         _auras = {},
+        _buffList = {},
         GetUnitAuraBySpellID = function(unit, spellId)
             if unit == "player" and _G.C_UnitAuras._auras[spellId] then
                 return _G.C_UnitAuras._auras[spellId]
+            end
+            return nil
+        end,
+        GetBuffDataByIndex = function(unit, index)
+            if unit == "player" then
+                return _G.C_UnitAuras._buffList[index]
             end
             return nil
         end,
@@ -32,14 +73,20 @@ function Harness.SetupEnvironment()
     _G.Enum.CooldownViewerCategory = {
         Essential = 1,
         Utility = 2,
+        TrackedBuff = 3,
+        TrackedBar = 4,
+        Buff = 3,
+        Bar = 4,
     }
 
     -- Mock C_CooldownViewer (with GetCooldownViewerCategorySet)
     _G.C_CooldownViewer = {
         _cooldowns = {},
         _categorySets = {
-            [1] = {},  -- Essential cooldown IDs
-            [2] = {},  -- Utility cooldown IDs
+            [1] = {},  -- Essential
+            [2] = {},  -- Utility
+            [3] = {},  -- TrackedBuff
+            [4] = {},  -- TrackedBar
         },
         GetCooldownViewerCooldownInfo = function(cid)
             return _G.C_CooldownViewer._cooldowns[cid]
@@ -75,6 +122,7 @@ function Harness.SetupEnvironment()
     end
 
     _G.BuffIconCooldownViewer = CreateMockViewer("BuffIconCooldownViewer")
+    _G.BuffBarCooldownViewer = CreateMockViewer("BuffBarCooldownViewer")
     _G.EssentialCooldownViewer = CreateMockViewer("EssentialCooldownViewer")
     _G.UtilityCooldownViewer = CreateMockViewer("UtilityCooldownViewer")
 
@@ -167,6 +215,8 @@ function Harness.SetupEnvironment()
         _auras = {},
         _states = {},
         _registeredOptions = {},
+        doubleWidth = 2,
+        normalWidth = 1,
         Add = function(data)
             _G.ThisWeeksAuras._auras[data.id] = data
         end,

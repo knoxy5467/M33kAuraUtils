@@ -8,13 +8,15 @@ local CDViewer = M33K.CooldownViewer
 -- Standard Blizzard Cooldown Viewers
 local VIEWERS = {
     "BuffIconCooldownViewer",
+    "BuffBarCooldownViewer",
     "EssentialCooldownViewer",
     "UtilityCooldownViewer",
 }
 
 -- Viewer name → category label
 local VIEWER_CATEGORY = {
-    BuffIconCooldownViewer  = "Buff",
+    BuffIconCooldownViewer  = "TrackedBuff",
+    BuffBarCooldownViewer   = "TrackedBar",
     EssentialCooldownViewer = "Essential",
     UtilityCooldownViewer   = "Utility",
 }
@@ -82,6 +84,42 @@ local function ResolveIconInfo(icon)
     return info
 end
 
+-- Extract stacks/charges from a Blizzard CDM icon frame
+local function ResolveIconStacks(icon)
+    local stacks = 0
+    if icon then
+        if icon.Applications and icon.Applications.Applications then
+            local val = tonumber(icon.Applications.Applications)
+            if val and val > 0 then stacks = val end
+        end
+        if stacks == 0 and icon.ChargeCount and icon.ChargeCount.Current then
+            local val = tonumber(icon.ChargeCount.Current)
+            if val and val > 0 then stacks = val end
+        end
+        if stacks == 0 then
+            local info = icon.cooldownInfo
+            if info then
+                if type(info.charges) == "number" and info.charges > 0 then
+                    stacks = info.charges
+                elseif type(info.applications) == "number" and info.applications > 0 then
+                    stacks = info.applications
+                end
+            end
+        end
+    end
+    return stacks
+end
+
+-- Extract icon texture from Blizzard CDM icon
+local function ResolveIconTexture(icon)
+    if not icon then return nil end
+    local iconTexture = icon.Icon or icon.icon
+    if iconTexture and type(iconTexture.GetTexture) == "function" then
+        return iconTexture:GetTexture()
+    end
+    return nil
+end
+
 -- Resolve spell name and icon texture for a given spellID
 local function ResolveSpellDisplay(spellID, iconFrame)
     local spellName, spellIcon
@@ -92,12 +130,8 @@ local function ResolveSpellDisplay(spellID, iconFrame)
         spellIcon = si and si.icon
     end
 
-    -- Fallback: try icon.Icon (capital I, Blizzard CDM convention) then icon.icon
     if not spellIcon and iconFrame then
-        local iconTexture = iconFrame.Icon or iconFrame.icon
-        if iconTexture and type(iconTexture.GetTexture) == "function" then
-            spellIcon = iconTexture:GetTexture()
-        end
+        spellIcon = ResolveIconTexture(iconFrame)
     end
 
     return spellName or ("Spell " .. spellID), spellIcon or 136243
@@ -124,6 +158,7 @@ end
 
 ----------------------------------------------------------------------
 -- Core: IsBuffActive (trigger/untrigger logic)
+-- Returns: active, expirationTime, duration, iconTexture, stacks, matchedSpellID, spellName
 ----------------------------------------------------------------------
 function CDViewer.IsBuffActive(targetSpells)
     local TARGET_SPELLS = NormalizeTargetSpells(targetSpells)
@@ -137,7 +172,9 @@ function CDViewer.IsBuffActive(targetSpells)
                     local dur = aura.duration or 0
                     local exp = aura.expirationTime or 0
                     local ic = aura.icon
-                    return true, exp, dur, ic
+                    local stacks = aura.applications or aura.charges or 0
+                    local name = aura.name or (M33K.Spells and M33K.Spells.GetSpellInfo(spellID) and M33K.Spells.GetSpellInfo(spellID).name) or "Buff"
+                    return true, exp, dur, ic, stacks, spellID, name
                 end
             end
         end
@@ -153,49 +190,50 @@ function CDViewer.IsBuffActive(targetSpells)
                     local info = ResolveIconInfo(icon)
 
                     local rawID = NormPublicSpellID(icon.spellID)
-                    local isMatch = (rawID and TARGET_SPELLS[rawID])
-                                 or (info and (TARGET_SPELLS[info.spellID] or TARGET_SPELLS[info.overrideSpellID] or TARGET_SPELLS[info.overrideTooltipSpellID]))
+                    local matchedID = nil
+                    if rawID and TARGET_SPELLS[rawID] then
+                        matchedID = rawID
+                    elseif info then
+                        if TARGET_SPELLS[info.spellID] then matchedID = info.spellID
+                        elseif TARGET_SPELLS[info.overrideSpellID] then matchedID = info.overrideSpellID
+                        elseif TARGET_SPELLS[info.overrideTooltipSpellID] then matchedID = info.overrideTooltipSpellID
+                        end
+                    end
 
-                    if not isMatch and info and type(info.linkedSpellIDs) == "table" then
+                    if not matchedID and info and type(info.linkedSpellIDs) == "table" then
                         for _, id in ipairs(info.linkedSpellIDs) do
                             if TARGET_SPELLS[id] then
-                                isMatch = true
+                                matchedID = id
                                 break
                             end
                         end
                     end
 
-                    if isMatch then
+                    if matchedID then
                         local exp = icon.cooldownExpirationTime or (info and info.cooldownExpirationTime) or 0
                         local dur = icon.cooldownDuration or (info and info.cooldownDuration) or 0
-                        local iconTexture = (icon.Icon or icon.icon)
-                        if iconTexture and type(iconTexture.GetTexture) == "function" then
-                            iconTexture = iconTexture:GetTexture()
-                        else
-                            iconTexture = nil
-                        end
-                        return true, exp, dur, iconTexture
+                        local iconTexture = ResolveIconTexture(icon)
+                        local stacks = ResolveIconStacks(icon)
+                        local name = (M33K.Spells and M33K.Spells.GetSpellInfo(matchedID) and M33K.Spells.GetSpellInfo(matchedID).name) or ("Spell " .. matchedID)
+                        return true, exp, dur, iconTexture, stacks, matchedID, name
                     end
                 end
             end
         end
     end
 
-    return false, 0, 0, nil
+    return false, 0, 0, nil, 0, nil, nil
 end
 
 ----------------------------------------------------------------------
 -- Enumerate: Scan viewer frame pools (live icons on screen)
 ----------------------------------------------------------------------
--- categoryFilter: nil=all, "Buff", "Essential", "Utility"
--- buffsOnly: if true, only return entries where cooldownUseAuraDisplayTime == true
 function CDViewer.EnumerateTracked(categoryFilter, buffsOnly)
     local tracked = {}
 
     for _, viewerName in ipairs(VIEWERS) do
         local cat = VIEWER_CATEGORY[viewerName]
 
-        -- Skip if a category filter is set and doesn't match
         if not categoryFilter or cat == categoryFilter then
             local viewer = _G[viewerName]
             if viewer and viewer.itemFramePool and type(viewer.itemFramePool.EnumerateActive) == "function" then
@@ -203,7 +241,6 @@ function CDViewer.EnumerateTracked(categoryFilter, buffsOnly)
                     if icon and (not icon.IsShown or icon:IsShown()) then
                         local isBuffTimer = (icon.cooldownUseAuraDisplayTime == true)
 
-                        -- If buffsOnly, skip non-buff entries
                         if not buffsOnly or isBuffTimer then
                             local info = ResolveIconInfo(icon)
                             local spellID = NormPublicSpellID(icon.spellID)
@@ -211,6 +248,9 @@ function CDViewer.EnumerateTracked(categoryFilter, buffsOnly)
 
                             if spellID then
                                 local spellName, spellIcon = ResolveSpellDisplay(spellID, icon)
+                                local exp = icon.cooldownExpirationTime or (info and info.cooldownExpirationTime) or 0
+                                local dur = icon.cooldownDuration or (info and info.cooldownDuration) or 0
+                                local stacks = ResolveIconStacks(icon)
 
                                 tracked[spellID] = {
                                     name = spellName,
@@ -219,6 +259,9 @@ function CDViewer.EnumerateTracked(categoryFilter, buffsOnly)
                                     viewerName = viewerName,
                                     isBuffTimer = isBuffTimer,
                                     linkedSpellIDs = CollectLinkedIDs(info),
+                                    duration = dur,
+                                    expirationTime = exp,
+                                    stacks = stacks,
                                 }
                             end
                         end
@@ -233,13 +276,11 @@ end
 
 ----------------------------------------------------------------------
 -- Enumerate via CDM Data API (C_CooldownViewer.GetCooldownViewerCategorySet)
--- This queries the Blizzard data layer directly, not just visible icons.
+-- Categories: "Essential", "Utility", "TrackedBuff", "TrackedBar"
 ----------------------------------------------------------------------
--- category: "Essential" or "Utility"
 function CDViewer.EnumerateFromCDM(category)
     local tracked = {}
 
-    -- Resolve Enum.CooldownViewerCategory
     local categoryEnum = Enum and Enum.CooldownViewerCategory or nil
     if not categoryEnum then return tracked end
 
@@ -248,8 +289,10 @@ function CDViewer.EnumerateFromCDM(category)
         catValue = categoryEnum.Essential
     elseif category == "Utility" then
         catValue = categoryEnum.Utility
-    else
-        return tracked
+    elseif category == "TrackedBuff" or category == "Buff" then
+        catValue = categoryEnum.TrackedBuff or categoryEnum.Buff or categoryEnum.TrackedBuffs
+    elseif category == "TrackedBar" or category == "Bar" then
+        catValue = categoryEnum.TrackedBar or categoryEnum.Bar or categoryEnum.TrackedBars
     end
 
     if not catValue then return tracked end
@@ -263,23 +306,37 @@ function CDViewer.EnumerateFromCDM(category)
     local okIDs, ids = pcall(C_CooldownViewer.GetCooldownViewerCategorySet, catValue, true)
     if not okIDs or type(ids) ~= "table" then return tracked end
 
+    local defaultViewer = "EssentialCooldownViewer"
+    if category == "Utility" then defaultViewer = "UtilityCooldownViewer"
+    elseif category == "TrackedBuff" or category == "Buff" then defaultViewer = "BuffIconCooldownViewer"
+    elseif category == "TrackedBar" or category == "Bar" then defaultViewer = "BuffBarCooldownViewer"
+    end
+
     for i = 1, #ids do
         local cid = ids[i]
         if not IsValueSecret(cid) then
             local okInfo, info = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cid)
             if okInfo and type(info) == "table" then
                 local spellID = NormPublicSpellID(info.spellID)
+                             or NormPublicSpellID(info.overrideSpellID)
+
                 if spellID then
                     local spellName, spellIcon = ResolveSpellDisplay(spellID, nil)
+                    local dur = info.cooldownDuration or 0
+                    local exp = info.cooldownExpirationTime or 0
+                    local stacks = info.charges or info.applications or 0
 
                     tracked[spellID] = {
                         name = spellName,
                         icon = spellIcon,
                         category = category,
-                        viewerName = (category == "Essential" and "EssentialCooldownViewer" or "UtilityCooldownViewer"),
-                        isBuffTimer = false,
+                        viewerName = defaultViewer,
+                        isBuffTimer = (category == "TrackedBuff" or category == "Buff" or category == "TrackedBar" or category == "Bar"),
                         linkedSpellIDs = CollectLinkedIDs(info),
                         cooldownID = cid,
+                        duration = dur,
+                        expirationTime = exp,
+                        stacks = stacks,
                     }
                 end
             end
@@ -290,28 +347,108 @@ function CDViewer.EnumerateFromCDM(category)
 end
 
 ----------------------------------------------------------------------
--- Enumerate ALL: merges viewer frame pool + CDM data layer
+-- Enumerate Tracked Buffs & Bars from CDM + Viewers
 ----------------------------------------------------------------------
-function CDViewer.EnumerateAll()
-    local all = {}
+function CDViewer.EnumerateTrackedBuffsAndBars()
+    local buffsAndBars = {}
 
-    -- 1. Frame pool scan (all categories)
-    local fromViewers = CDViewer.EnumerateTracked(nil, false)
-    for spellID, entry in pairs(fromViewers) do
-        all[spellID] = entry
-    end
-
-    -- 2. CDM data layer for Essential and Utility
-    for _, cat in ipairs({ "Essential", "Utility" }) do
+    -- 1. CDM Data Layer for TrackedBuff and TrackedBar
+    for _, cat in ipairs({ "TrackedBuff", "TrackedBar" }) do
         local fromCDM = CDViewer.EnumerateFromCDM(cat)
         for spellID, entry in pairs(fromCDM) do
-            if not all[spellID] then
-                all[spellID] = entry
+            buffsAndBars[spellID] = entry
+        end
+    end
+
+    -- 2. Live viewer frames for BuffIconCooldownViewer & BuffBarCooldownViewer
+    for _, cat in ipairs({ "TrackedBuff", "TrackedBar" }) do
+        local fromViewer = CDViewer.EnumerateTracked(cat, false)
+        for spellID, entry in pairs(fromViewer) do
+            if not buffsAndBars[spellID] then
+                buffsAndBars[spellID] = entry
             end
         end
     end
 
+    return buffsAndBars
+end
+
+----------------------------------------------------------------------
+-- Enumerate Cooldowns: merges Essential + Utility from CDM + viewers
+----------------------------------------------------------------------
+function CDViewer.EnumerateCooldowns()
+    local cds = {}
+
+    -- 1. CDM Data Layer for Essential and Utility
+    for _, cat in ipairs({ "Essential", "Utility" }) do
+        local fromCDM = CDViewer.EnumerateFromCDM(cat)
+        for spellID, entry in pairs(fromCDM) do
+            cds[spellID] = entry
+        end
+    end
+
+    -- 2. Live viewer frames for EssentialCooldownViewer & UtilityCooldownViewer
+    for _, cat in ipairs({ "Essential", "Utility" }) do
+        local fromViewer = CDViewer.EnumerateTracked(cat, false)
+        for spellID, entry in pairs(fromViewer) do
+            if not cds[spellID] then
+                cds[spellID] = entry
+            end
+        end
+    end
+
+    return cds
+end
+
+----------------------------------------------------------------------
+-- Enumerate ALL CDM entries (Buffs, Bars, Essential, Utility)
+----------------------------------------------------------------------
+function CDViewer.EnumerateAll()
+    local all = {}
+
+    local buffs = CDViewer.EnumerateTrackedBuffsAndBars()
+    for spellID, entry in pairs(buffs) do
+        all[spellID] = entry
+    end
+
+    local cds = CDViewer.EnumerateCooldowns()
+    for spellID, entry in pairs(cds) do
+        if not all[spellID] then
+            all[spellID] = entry
+        end
+    end
+
     return all
+end
+
+----------------------------------------------------------------------
+-- Query detailed spell information from CDM & C_Spell
+----------------------------------------------------------------------
+function CDViewer.GetCDMSpellInfo(spellIdentifier)
+    local spellID = tonumber(spellIdentifier)
+    if not spellID then return nil end
+
+    local name, icon = ResolveSpellDisplay(spellID, nil)
+    local charges, maxCharges, chargeStart, chargeDuration = 0, 0, 0, 0
+    local cdStart, cdDuration, isEnabled = 0, 0, true
+
+    if M33K.Spells then
+        charges, maxCharges, chargeStart, chargeDuration = M33K.Spells.GetCharges(spellID)
+        cdStart, cdDuration, isEnabled = M33K.Spells.GetCooldown(spellID)
+    end
+
+    return {
+        spellID = spellID,
+        name = name,
+        icon = icon,
+        charges = charges,
+        maxCharges = maxCharges,
+        chargeStart = chargeStart,
+        chargeDuration = chargeDuration,
+        cdStart = cdStart,
+        cdDuration = cdDuration,
+        isEnabled = isEnabled,
+    }
 end
 
 ----------------------------------------------------------------------
@@ -321,7 +458,10 @@ _G.M33kAuraUtils.IsBuffActive = CDViewer.IsBuffActive
 _G.M33kAuraUtils.IsCooldownViewerBuffActive = CDViewer.IsBuffActive
 _G.M33kAuraUtils.EnumerateTracked = CDViewer.EnumerateTracked
 _G.M33kAuraUtils.EnumerateFromCDM = CDViewer.EnumerateFromCDM
+_G.M33kAuraUtils.EnumerateTrackedBuffsAndBars = CDViewer.EnumerateTrackedBuffsAndBars
+_G.M33kAuraUtils.EnumerateCooldowns = CDViewer.EnumerateCooldowns
 _G.M33kAuraUtils.EnumerateAll = CDViewer.EnumerateAll
+_G.M33kAuraUtils.GetCDMSpellInfo = CDViewer.GetCDMSpellInfo
 
 ----------------------------------------------------------------------
 -- Engine wrapper for lifecycle events and callback subscriptions
