@@ -334,3 +334,54 @@ Harness.RunTest("11. SyncSpellState pushes usable, charges, duration, and cooldo
     _G.C_Spell._cooldowns[31884] = nil
     _G.C_Spell._charges[31884] = nil
 end)
+
+Harness.RunTest("12. Generic non-spell triggers (Health/Power/Combat Log) are not corrupted and flatten properly", function()
+    -- Mock a generic trigger (e.g. Health trigger with type="status", event="Health")
+    local mockGenericOptionsFunc = function(data, triggernum)
+        return {
+            ["trigger." .. triggernum .. ".Health"] = {
+                __title = "Health",
+                __order = 10,
+                healthValue = { type = "input", name = "Health Value", order = 1 },
+            }
+        }
+    end
+
+    local wrapped = M33K.Injection.WrapSpellTriggerOptions(mockGenericOptionsFunc)
+
+    local data = {
+        triggers = {
+            [1] = {
+                trigger = {
+                    type = "status",
+                    event = "Health",
+                }
+            }
+        }
+    }
+
+    local result = wrapped(data, 1)
+    Harness.Assert(result ~= nil, "Result table should exist")
+    Harness.Assert(result["trigger.1.Health"] ~= nil, "trigger.1.Health section should exist")
+
+    -- Verify no naked keys leaked onto the root result table
+    Harness.AssertEquals(result.cvHeader, nil, "cvHeader must NOT leak onto root options table")
+    Harness.AssertEquals(result.useCooldownViewer, nil, "useCooldownViewer must NOT leak onto root options table")
+    Harness.AssertEquals(result.cvPickerCooldowns, nil, "cvPickerCooldowns must NOT leak onto root options table")
+
+    -- Verify simulate flattenRegionOptions
+    local base = 1000
+    local flattened = {}
+    for groupKey, options in pairs(result) do
+        Harness.Assert(options.__order ~= nil, "Every group in allOptions MUST have an __order field")
+        local groupBase = base * options.__order
+        for optKey, opt in pairs(options) do
+            if not string.find(optKey, "^__") then
+                flattened[groupKey .. "." .. optKey] = opt
+            end
+        end
+    end
+
+    Harness.Assert(flattened["trigger.1.Health.healthValue"] ~= nil, "Flattened options contain healthValue")
+end)
+

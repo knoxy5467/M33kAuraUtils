@@ -7,6 +7,42 @@ local Injection = M33K.Injection
 
 local hookedAuras = {}
 
+-- Safely locate the trigger's sub-table in optionsTable without ever mutating root
+local function FindTriggerOptionsSubTable(optionsTable, triggernum)
+    if type(optionsTable) ~= "table" then return nil end
+
+    -- 1. Check exact aura_options key
+    if type(optionsTable["trigger." .. triggernum .. ".aura_options"]) == "table" then
+        return optionsTable["trigger." .. triggernum .. ".aura_options"]
+    end
+
+    -- 2. Check any "trigger.<triggernum>.<anything>" key
+    local prefix = "trigger." .. triggernum .. "."
+    for k, v in pairs(optionsTable) do
+        if type(k) == "string" and string.sub(k, 1, #prefix) == prefix and type(v) == "table" then
+            return v
+        end
+    end
+
+    return nil
+end
+
+local function IsSpellTrigger(trigger)
+    if not trigger then return false end
+    if trigger.type == "spell" then return true end
+    if trigger.type == "status" or trigger.type == "event" then
+        local ev = trigger.event
+        if ev == "Action Usable"
+           or ev == "Cooldown Progress (Spell)"
+           or ev == "Spell Known"
+           or ev == "Cast"
+           or ev == "Spell Activation Overlay" then
+            return true
+        end
+    end
+    return false
+end
+
 -- Build dropdown values from a tracked entries table
 local function BuildDropdownValues(tracked, defaultLabel)
     local vals = { ["0"] = defaultLabel or "-- Select a spell --" }
@@ -46,180 +82,185 @@ function Injection.WrapBuffTriggerOptions(origFunc)
         local trigger = data.triggers and data.triggers[triggernum] and data.triggers[triggernum].trigger
         if not trigger then return optionsTable end
 
-        local aura_options = optionsTable["trigger." .. triggernum .. ".aura_options"] or optionsTable
-        if aura_options then
-            local WA = _G.ThisWeeksAuras or _G.M33kAuras or _G.WeakAuras
-            local dw = WA and WA.doubleWidth or 2
+        -- Only inject into player aura/buff triggers
+        if not (trigger.type == "aura2" or trigger.type == "aura") then
+            return optionsTable
+        end
 
-            -- Header
-            aura_options.cvHeader = {
-                type = "header",
-                name = "|cFF00B4FFBlizzard Cooldown Manager Tracking (M33kAuraUtils)|r",
-                order = 50.0,
-                hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player")
-                end,
-            }
+        local subTable = FindTriggerOptionsSubTable(optionsTable, triggernum)
+        if not subTable then return optionsTable end
 
-            -- Enable Toggle
-            aura_options.useCooldownViewer = {
-                type = "toggle",
-                name = "Enable Cooldown Viewer Tracking",
-                desc = "Tracks active buff timers through Blizzard Cooldown Manager (BuffIconCooldownViewer, BuffBarCooldownViewer) and C_UnitAuras.",
-                order = 50.1,
-                width = dw,
-                hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player")
-                end,
-                get = function() return trigger.useCooldownViewer end,
-                set = function(info, v)
-                    trigger.useCooldownViewer = v
-                    if WA and WA.Add then WA.Add(data) end
-                    if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
-                end,
-            }
+        local WA = _G.ThisWeeksAuras or _G.M33kAuras or _G.WeakAuras
+        local dw = WA and WA.doubleWidth or 2
 
-            -- Linked Spell IDs (manual input)
-            aura_options.cvLinkedSpells = {
-                type = "input",
-                name = "Linked Spell IDs",
-                desc = "Comma-separated list of spell IDs to match in Cooldown Manager (e.g. 188370, 26573).",
-                order = 50.2,
-                width = dw,
-                hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
-                end,
-                get = function()
-                    if type(trigger.cvLinkedSpells) == "table" then
-                        return table.concat(trigger.cvLinkedSpells, ", ")
+        -- Header
+        subTable.cvHeader = {
+            type = "header",
+            name = "|cFF00B4FFBlizzard Cooldown Manager Tracking (M33kAuraUtils)|r",
+            order = 50.0,
+            hidden = function()
+                return not (trigger.unit == "player")
+            end,
+        }
+
+        -- Enable Toggle
+        subTable.useCooldownViewer = {
+            type = "toggle",
+            name = "Enable Cooldown Viewer Tracking",
+            desc = "Tracks active buff timers through Blizzard Cooldown Manager (BuffIconCooldownViewer, BuffBarCooldownViewer) and C_UnitAuras.",
+            order = 50.1,
+            width = dw,
+            hidden = function()
+                return not (trigger.unit == "player")
+            end,
+            get = function() return trigger.useCooldownViewer end,
+            set = function(info, v)
+                trigger.useCooldownViewer = v
+                if WA and WA.Add then WA.Add(data) end
+                if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
+            end,
+        }
+
+        -- Linked Spell IDs (manual input)
+        subTable.cvLinkedSpells = {
+            type = "input",
+            name = "Linked Spell IDs",
+            desc = "Comma-separated list of spell IDs to match in Cooldown Manager (e.g. 188370, 26573).",
+            order = 50.2,
+            width = dw,
+            hidden = function()
+                return not (trigger.unit == "player" and trigger.useCooldownViewer)
+            end,
+            get = function()
+                if type(trigger.cvLinkedSpells) == "table" then
+                    return table.concat(trigger.cvLinkedSpells, ", ")
+                end
+                return tostring(trigger.cvLinkedSpells or "")
+            end,
+            set = function(info, v)
+                local list = {}
+                for id in string.gmatch(v or "", "(%d+)") do
+                    table.insert(list, tonumber(id))
+                end
+                trigger.cvLinkedSpells = list
+                if WA and WA.Add then WA.Add(data) end
+            end,
+        }
+
+        -- Checkbox: Show Untracked / All Buffs
+        subTable.cvShowAllBuffs = {
+            type = "toggle",
+            name = "Show Untracked Buffs",
+            desc = "When checked, includes all potential buffs from the Blizzard Cooldown Manager database, even if not currently tracked on your bars.",
+            order = 50.3,
+            width = dw,
+            hidden = function()
+                return not (trigger.unit == "player" and trigger.useCooldownViewer)
+            end,
+            get = function() return trigger.cvShowAllBuffs == true end,
+            set = function(info, v)
+                trigger.cvShowAllBuffs = v
+                if WA and WA.Add then WA.Add(data) end
+                if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
+            end,
+        }
+
+        -- Dropdown: Tracked Buffs & Bars
+        subTable.cvPickerBuffsAndBars = {
+            type = "select",
+            name = "Select Tracked Buff / Bar",
+            desc = "Shows buffs and bars from your Blizzard Cooldown Manager. Select one to add it to your aura tracking.",
+            order = 50.4,
+            width = dw,
+            hidden = function()
+                return not (trigger.unit == "player" and trigger.useCooldownViewer)
+            end,
+            values = function()
+                if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateTrackedBuffsAndBars then
+                    local includeAll = (trigger.cvShowAllBuffs == true)
+                    return BuildDropdownValues(M33K.CooldownViewer.EnumerateTrackedBuffsAndBars(includeAll), "-- Select Buff or Bar --")
+                end
+                return { ["0"] = "-- No buffs/bars found --" }
+            end,
+            get = function() return trigger._cvPickBuffOrBar or "0" end,
+            set = function(info, v) trigger._cvPickBuffOrBar = v end,
+        }
+
+        -- Button: Add Selected Buff
+        subTable.cvPickerAdd = {
+            type = "execute",
+            name = "Add Selected Buff",
+            desc = "Adds the chosen buff to the Linked Spell IDs list.",
+            order = 50.5,
+            width = dw,
+            hidden = function()
+                return not (trigger.unit == "player" and trigger.useCooldownViewer)
+            end,
+            func = function()
+                if type(trigger.cvLinkedSpells) ~= "table" then
+                    trigger.cvLinkedSpells = {}
+                end
+
+                local sel = tonumber(trigger._cvPickBuffOrBar)
+                if sel and sel ~= 0 then
+                    local isDup = false
+                    for _, existing in ipairs(trigger.cvLinkedSpells) do
+                        if existing == sel then isDup = true; break end
                     end
-                    return tostring(trigger.cvLinkedSpells or "")
-                end,
-                set = function(info, v)
-                    local list = {}
-                    for id in string.gmatch(v or "", "(%d+)") do
-                        table.insert(list, tonumber(id))
-                    end
-                    trigger.cvLinkedSpells = list
-                    if WA and WA.Add then WA.Add(data) end
-                end,
-            }
-
-            -- Checkbox: Show Untracked / All Buffs
-            aura_options.cvShowAllBuffs = {
-                type = "toggle",
-                name = "Show Untracked Buffs",
-                desc = "When checked, includes all potential buffs from the Blizzard Cooldown Manager database, even if not currently tracked on your bars.",
-                order = 50.3,
-                width = dw,
-                hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
-                end,
-                get = function() return trigger.cvShowAllBuffs == true end,
-                set = function(info, v)
-                    trigger.cvShowAllBuffs = v
-                    if WA and WA.Add then WA.Add(data) end
-                    if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
-                end,
-            }
-
-            -- Dropdown: Tracked Buffs & Bars
-            aura_options.cvPickerBuffsAndBars = {
-                type = "select",
-                name = "Select Tracked Buff / Bar",
-                desc = "Shows buffs and bars from your Blizzard Cooldown Manager. Select one to add it to your aura tracking.",
-                order = 50.4,
-                width = dw,
-                hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
-                end,
-                values = function()
-                    if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateTrackedBuffsAndBars then
-                        local includeAll = (trigger.cvShowAllBuffs == true)
-                        return BuildDropdownValues(M33K.CooldownViewer.EnumerateTrackedBuffsAndBars(includeAll), "-- Select Buff or Bar --")
-                    end
-                    return { ["0"] = "-- No buffs/bars found --" }
-                end,
-                get = function() return trigger._cvPickBuffOrBar or "0" end,
-                set = function(info, v) trigger._cvPickBuffOrBar = v end,
-            }
-
-            -- Button: Add Selected Buff
-            aura_options.cvPickerAdd = {
-                type = "execute",
-                name = "Add Selected Buff",
-                desc = "Adds the chosen buff to the Linked Spell IDs list.",
-                order = 50.5,
-                width = dw,
-                hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
-                end,
-                func = function()
-                    if type(trigger.cvLinkedSpells) ~= "table" then
-                        trigger.cvLinkedSpells = {}
+                    if not isDup then
+                        table.insert(trigger.cvLinkedSpells, sel)
                     end
 
-                    local sel = tonumber(trigger._cvPickBuffOrBar)
-                    if sel and sel ~= 0 then
-                        local isDup = false
-                        for _, existing in ipairs(trigger.cvLinkedSpells) do
-                            if existing == sel then isDup = true; break end
-                        end
-                        if not isDup then
-                            table.insert(trigger.cvLinkedSpells, sel)
-                        end
-
-                        -- Auto-add linked/override IDs from CDM entry
-                        if M33K.CooldownViewer then
-                            local all = M33K.CooldownViewer.EnumerateAll()
-                            local entry = all[sel]
-                            if entry and type(entry.linkedSpellIDs) == "table" then
-                                for _, lid in ipairs(entry.linkedSpellIDs) do
-                                    local lidDup = false
-                                    for _, existing in ipairs(trigger.cvLinkedSpells) do
-                                        if existing == lid then lidDup = true; break end
-                                    end
-                                    if not lidDup then
-                                        table.insert(trigger.cvLinkedSpells, lid)
-                                    end
+                    -- Auto-add linked/override IDs from CDM entry
+                    if M33K.CooldownViewer then
+                        local all = M33K.CooldownViewer.EnumerateAll()
+                        local entry = all[sel]
+                        if entry and type(entry.linkedSpellIDs) == "table" then
+                            for _, lid in ipairs(entry.linkedSpellIDs) do
+                                local lidDup = false
+                                for _, existing in ipairs(trigger.cvLinkedSpells) do
+                                    if existing == lid then lidDup = true; break end
+                                end
+                                if not lidDup then
+                                    table.insert(trigger.cvLinkedSpells, lid)
                                 end
                             end
                         end
-
-                        trigger._cvPickBuffOrBar = "0"
-
-                        if WA then
-                            if WA.Add then WA.Add(data) end
-                            if WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
-                        end
                     end
-                end,
-            }
 
-            -- Button: Refresh Lists
-            aura_options.cvPickerRefresh = {
-                type = "execute",
-                name = "|cFF00B4FFRefresh Tracked Buffs|r",
-                desc = "Re-scans the Blizzard Cooldown Manager for currently tracked buffs and bars.",
-                order = 50.6,
-                width = dw,
-                hidden = function()
-                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
-                end,
-                func = function()
-                    if WA and WA.ClearAndUpdateOptions then
-                        WA.ClearAndUpdateOptions(data.id)
+                    trigger._cvPickBuffOrBar = "0"
+
+                    if WA then
+                        if WA.Add then WA.Add(data) end
+                        if WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
                     end
-                end,
-            }
-        end
+                end
+            end,
+        }
+
+        -- Button: Refresh Lists
+        subTable.cvPickerRefresh = {
+            type = "execute",
+            name = "|cFF00B4FFRefresh Tracked Buffs|r",
+            desc = "Re-scans the Blizzard Cooldown Manager for currently tracked buffs and bars.",
+            order = 50.6,
+            width = dw,
+            hidden = function()
+                return not (trigger.unit == "player" and trigger.useCooldownViewer)
+            end,
+            func = function()
+                if WA and WA.ClearAndUpdateOptions then
+                    WA.ClearAndUpdateOptions(data.id)
+                end
+            end,
+        }
 
         return optionsTable
     end
 end
 
 ----------------------------------------------------------------------
--- Spell Trigger Options Wrapper (for spell/action triggers)
+-- Spell Trigger Options Wrapper (for spell/action/status triggers)
 ----------------------------------------------------------------------
 function Injection.WrapSpellTriggerOptions(origFunc)
     return function(data, triggernum)
@@ -229,178 +270,180 @@ function Injection.WrapSpellTriggerOptions(origFunc)
         local trigger = data.triggers and data.triggers[triggernum] and data.triggers[triggernum].trigger
         if not trigger then return optionsTable end
 
-        local spell_options = optionsTable["trigger." .. triggernum .. ".spell_options"]
-                           or optionsTable["trigger." .. triggernum .. ".aura_options"]
-                           or optionsTable
+        -- Only inject if this is actually a spell trigger
+        if not IsSpellTrigger(trigger) then
+            return optionsTable
+        end
 
-        if spell_options then
-            local WA = _G.ThisWeeksAuras or _G.M33kAuras or _G.WeakAuras
-            local dw = WA and WA.doubleWidth or 2
+        local subTable = FindTriggerOptionsSubTable(optionsTable, triggernum)
+        if not subTable then return optionsTable end
 
-            -- Header
-            spell_options.cvHeader = {
-                type = "header",
-                name = "|cFF00B4FFBlizzard Cooldown Manager Tracking (M33kAuraUtils)|r",
-                order = 50.0,
-                hidden = function()
-                    return not (trigger.type == "spell" or trigger.type == "status")
-                end,
-            }
+        local WA = _G.ThisWeeksAuras or _G.M33kAuras or _G.WeakAuras
+        local dw = WA and WA.doubleWidth or 2
 
-            -- Enable Toggle
-            spell_options.useCooldownViewer = {
-                type = "toggle",
-                name = "Enable Cooldown Viewer Tracking",
-                desc = "Tracks spell cooldowns, charges, and usability through Blizzard Cooldown Manager (Essential & Utility Viewers).",
-                order = 50.1,
-                width = dw,
-                hidden = function()
-                    return not (trigger.type == "spell" or trigger.type == "status")
-                end,
-                get = function() return trigger.useCooldownViewer end,
-                set = function(info, v)
-                    trigger.useCooldownViewer = v
-                    if WA and WA.Add then WA.Add(data) end
-                    if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
-                end,
-            }
+        -- Header
+        subTable.cvHeader = {
+            type = "header",
+            name = "|cFF00B4FFBlizzard Cooldown Manager Tracking (M33kAuraUtils)|r",
+            order = 50.0,
+            hidden = function()
+                return not IsSpellTrigger(trigger)
+            end,
+        }
 
-            -- Linked Spell IDs (manual input)
-            spell_options.cvLinkedSpells = {
-                type = "input",
-                name = "Linked Spell IDs",
-                desc = "Comma-separated list of spell IDs to track in Cooldown Manager.",
-                order = 50.2,
-                width = dw,
-                hidden = function()
-                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
-                end,
-                get = function()
-                    if type(trigger.cvLinkedSpells) == "table" then
-                        return table.concat(trigger.cvLinkedSpells, ", ")
+        -- Enable Toggle
+        subTable.useCooldownViewer = {
+            type = "toggle",
+            name = "Enable Cooldown Viewer Tracking",
+            desc = "Tracks spell cooldowns, charges, and usability through Blizzard Cooldown Manager (Essential & Utility Viewers).",
+            order = 50.1,
+            width = dw,
+            hidden = function()
+                return not IsSpellTrigger(trigger)
+            end,
+            get = function() return trigger.useCooldownViewer end,
+            set = function(info, v)
+                trigger.useCooldownViewer = v
+                if WA and WA.Add then WA.Add(data) end
+                if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
+            end,
+        }
+
+        -- Linked Spell IDs (manual input)
+        subTable.cvLinkedSpells = {
+            type = "input",
+            name = "Linked Spell IDs",
+            desc = "Comma-separated list of spell IDs to track in Cooldown Manager.",
+            order = 50.2,
+            width = dw,
+            hidden = function()
+                return not (IsSpellTrigger(trigger) and trigger.useCooldownViewer)
+            end,
+            get = function()
+                if type(trigger.cvLinkedSpells) == "table" then
+                    return table.concat(trigger.cvLinkedSpells, ", ")
+                end
+                return tostring(trigger.cvLinkedSpells or "")
+            end,
+            set = function(info, v)
+                local list = {}
+                for id in string.gmatch(v or "", "(%d+)") do
+                    table.insert(list, tonumber(id))
+                end
+                trigger.cvLinkedSpells = list
+                if WA and WA.Add then WA.Add(data) end
+            end,
+        }
+
+        -- Checkbox: Show Untracked Cooldowns
+        subTable.cvShowAllCooldowns = {
+            type = "toggle",
+            name = "Show Untracked Cooldowns",
+            desc = "When checked, includes all cooldowns from the Blizzard Cooldown Manager database, even if not currently tracked on your bars.",
+            order = 50.3,
+            width = dw,
+            hidden = function()
+                return not (IsSpellTrigger(trigger) and trigger.useCooldownViewer)
+            end,
+            get = function() return trigger.cvShowAllCooldowns == true end,
+            set = function(info, v)
+                trigger.cvShowAllCooldowns = v
+                if WA and WA.Add then WA.Add(data) end
+                if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
+            end,
+        }
+
+        -- Dropdown: Essential & Utility Cooldowns
+        subTable.cvPickerCooldowns = {
+            type = "select",
+            name = "Select Tracked Cooldown",
+            desc = "Shows essential and utility cooldowns from your Blizzard Cooldown Manager.",
+            order = 50.4,
+            width = dw,
+            hidden = function()
+                return not (IsSpellTrigger(trigger) and trigger.useCooldownViewer)
+            end,
+            values = function()
+                if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateCooldowns then
+                    local includeAll = (trigger.cvShowAllCooldowns == true)
+                    return BuildDropdownValues(M33K.CooldownViewer.EnumerateCooldowns(includeAll), "-- Select Cooldown --")
+                end
+                return { ["0"] = "-- No cooldowns found --" }
+            end,
+            get = function() return trigger._cvPickCooldown or "0" end,
+            set = function(info, v) trigger._cvPickCooldown = v end,
+        }
+
+        -- Button: Add Selected Cooldown
+        subTable.cvPickerAdd = {
+            type = "execute",
+            name = "Add Selected Cooldown",
+            desc = "Sets the chosen cooldown spell as the active tracked spell.",
+            order = 50.5,
+            width = dw,
+            hidden = function()
+                return not (IsSpellTrigger(trigger) and trigger.useCooldownViewer)
+            end,
+            func = function()
+                local sel = tonumber(trigger._cvPickCooldown)
+                if sel and sel ~= 0 then
+                    trigger.spellName = sel
+                    trigger.spellId = sel
+                    if type(trigger.cvLinkedSpells) ~= "table" then
+                        trigger.cvLinkedSpells = {}
                     end
-                    return tostring(trigger.cvLinkedSpells or "")
-                end,
-                set = function(info, v)
-                    local list = {}
-                    for id in string.gmatch(v or "", "(%d+)") do
-                        table.insert(list, tonumber(id))
+
+                    local isDup = false
+                    for _, existing in ipairs(trigger.cvLinkedSpells) do
+                        if existing == sel then isDup = true; break end
                     end
-                    trigger.cvLinkedSpells = list
-                    if WA and WA.Add then WA.Add(data) end
-                end,
-            }
-
-            -- Checkbox: Show Untracked Cooldowns
-            spell_options.cvShowAllCooldowns = {
-                type = "toggle",
-                name = "Show Untracked Cooldowns",
-                desc = "When checked, includes all cooldowns from the Blizzard Cooldown Manager database, even if not currently tracked on your bars.",
-                order = 50.3,
-                width = dw,
-                hidden = function()
-                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
-                end,
-                get = function() return trigger.cvShowAllCooldowns == true end,
-                set = function(info, v)
-                    trigger.cvShowAllCooldowns = v
-                    if WA and WA.Add then WA.Add(data) end
-                    if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
-                end,
-            }
-
-            -- Dropdown: Essential & Utility Cooldowns
-            spell_options.cvPickerCooldowns = {
-                type = "select",
-                name = "Select Tracked Cooldown",
-                desc = "Shows essential and utility cooldowns from your Blizzard Cooldown Manager.",
-                order = 50.4,
-                width = dw,
-                hidden = function()
-                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
-                end,
-                values = function()
-                    if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateCooldowns then
-                        local includeAll = (trigger.cvShowAllCooldowns == true)
-                        return BuildDropdownValues(M33K.CooldownViewer.EnumerateCooldowns(includeAll), "-- Select Cooldown --")
+                    if not isDup then
+                        table.insert(trigger.cvLinkedSpells, sel)
                     end
-                    return { ["0"] = "-- No cooldowns found --" }
-                end,
-                get = function() return trigger._cvPickCooldown or "0" end,
-                set = function(info, v) trigger._cvPickCooldown = v end,
-            }
 
-            -- Button: Add Selected Cooldown
-            spell_options.cvPickerAdd = {
-                type = "execute",
-                name = "Add Selected Cooldown",
-                desc = "Sets the chosen cooldown spell as the active tracked spell.",
-                order = 50.5,
-                width = dw,
-                hidden = function()
-                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
-                end,
-                func = function()
-                    local sel = tonumber(trigger._cvPickCooldown)
-                    if sel and sel ~= 0 then
-                        trigger.spellName = sel
-                        trigger.spellId = sel
-                        if type(trigger.cvLinkedSpells) ~= "table" then
-                            trigger.cvLinkedSpells = {}
-                        end
-
-                        local isDup = false
-                        for _, existing in ipairs(trigger.cvLinkedSpells) do
-                            if existing == sel then isDup = true; break end
-                        end
-                        if not isDup then
-                            table.insert(trigger.cvLinkedSpells, sel)
-                        end
-
-                        -- Auto-add linked/override IDs
-                        if M33K.CooldownViewer then
-                            local all = M33K.CooldownViewer.EnumerateAll()
-                            local entry = all[sel]
-                            if entry and type(entry.linkedSpellIDs) == "table" then
-                                for _, lid in ipairs(entry.linkedSpellIDs) do
-                                    local lidDup = false
-                                    for _, existing in ipairs(trigger.cvLinkedSpells) do
-                                        if existing == lid then lidDup = true; break end
-                                    end
-                                    if not lidDup then
-                                        table.insert(trigger.cvLinkedSpells, lid)
-                                    end
+                    -- Auto-add linked/override IDs
+                    if M33K.CooldownViewer then
+                        local all = M33K.CooldownViewer.EnumerateAll()
+                        local entry = all[sel]
+                        if entry and type(entry.linkedSpellIDs) == "table" then
+                            for _, lid in ipairs(entry.linkedSpellIDs) do
+                                local lidDup = false
+                                for _, existing in ipairs(trigger.cvLinkedSpells) do
+                                    if existing == lid then lidDup = true; break end
+                                end
+                                if not lidDup then
+                                    table.insert(trigger.cvLinkedSpells, lid)
                                 end
                             end
                         end
-
-                        trigger._cvPickCooldown = "0"
-
-                        if WA then
-                            if WA.Add then WA.Add(data) end
-                            if WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
-                        end
                     end
-                end,
-            }
 
-            -- Button: Refresh Cooldowns
-            spell_options.cvPickerRefresh = {
-                type = "execute",
-                name = "|cFF00B4FFRefresh Cooldowns|r",
-                desc = "Re-scans the Blizzard Cooldown Manager for cooldowns.",
-                order = 50.6,
-                width = dw,
-                hidden = function()
-                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
-                end,
-                func = function()
-                    if WA and WA.ClearAndUpdateOptions then
-                        WA.ClearAndUpdateOptions(data.id)
+                    trigger._cvPickCooldown = "0"
+
+                    if WA then
+                        if WA.Add then WA.Add(data) end
+                        if WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
                     end
-                end,
-            }
-        end
+                end
+            end,
+        }
+
+        -- Button: Refresh Cooldowns
+        subTable.cvPickerRefresh = {
+            type = "execute",
+            name = "|cFF00B4FFRefresh Cooldowns|r",
+            desc = "Re-scans the Blizzard Cooldown Manager for cooldowns.",
+            order = 50.6,
+            width = dw,
+            hidden = function()
+                return not (IsSpellTrigger(trigger) and trigger.useCooldownViewer)
+            end,
+            func = function()
+                if WA and WA.ClearAndUpdateOptions then
+                    WA.ClearAndUpdateOptions(data.id)
+                end
+            end,
+        }
 
         return optionsTable
     end
@@ -541,13 +584,23 @@ function Injection.Initialize()
         if WA.RegisterTriggerSystemOptions and not WA._cvRegisterHooked then
             local orig_Register = WA.RegisterTriggerSystemOptions
             WA.RegisterTriggerSystemOptions = function(systemTypes, optionsFunc)
+                local hasAura2 = false
+                local hasGeneric = false
                 for _, sysType in ipairs(systemTypes) do
-                    if sysType == "aura2" then
-                        optionsFunc = Injection.WrapBuffTriggerOptions(optionsFunc)
-                    elseif sysType == "spell" or sysType == "status" then
-                        optionsFunc = Injection.WrapSpellTriggerOptions(optionsFunc)
+                    if sysType == "aura2" or sysType == "aura" then
+                        hasAura2 = true
+                    elseif sysType == "status" or sysType == "event" or sysType == "custom" or sysType == "spell" then
+                        hasGeneric = true
                     end
                 end
+
+                if hasAura2 then
+                    optionsFunc = Injection.WrapBuffTriggerOptions(optionsFunc)
+                end
+                if hasGeneric then
+                    optionsFunc = Injection.WrapSpellTriggerOptions(optionsFunc)
+                end
+
                 return orig_Register(systemTypes, optionsFunc)
             end
             WA._cvRegisterHooked = true
