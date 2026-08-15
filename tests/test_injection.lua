@@ -7,7 +7,7 @@ M33K.Injection.Initialize()
 
 Harness.BeginSuite("Cross-Addon Injection & Cooldown Viewer Integration Tests")
 
-Harness.RunTest("1. Injection wraps BuffTrigger options generator and injects Cooldown Manager controls", function()
+Harness.RunTest("1. Injection wraps BuffTrigger options generator and injects ONLY Tracked Buffs & Bars controls", function()
     local dummyData = {
         id = "TestCooldownAura",
         triggers = {
@@ -31,7 +31,7 @@ Harness.RunTest("1. Injection wraps BuffTrigger options generator and injects Co
     Harness.Assert(aura_options.useCooldownViewer ~= nil, "useCooldownViewer toggle should be injected")
     Harness.Assert(aura_options.cvLinkedSpells ~= nil, "cvLinkedSpells input should be injected")
     Harness.Assert(aura_options.cvPickerBuffsAndBars ~= nil, "cvPickerBuffsAndBars dropdown should be injected")
-    Harness.Assert(aura_options.cvPickerCooldowns ~= nil, "cvPickerCooldowns dropdown should be injected")
+    Harness.Assert(aura_options.cvPickerCooldowns == nil, "cvPickerCooldowns should NOT be present on Buff triggers")
     Harness.Assert(aura_options.cvPickerAdd ~= nil, "cvPickerAdd button should be injected")
     Harness.Assert(aura_options.cvPickerRefresh ~= nil, "cvPickerRefresh button should be injected")
 end)
@@ -55,8 +55,6 @@ Harness.RunTest("2. Injected controls hidden property respects unit == player", 
     Harness.AssertEquals(targetOpts.useCooldownViewer.hidden(), true, "Target unit SHOULD hide toggle")
     Harness.AssertEquals(playerOpts.cvPickerBuffsAndBars.hidden(), false, "Player unit should NOT hide Buffs/Bars picker")
     Harness.AssertEquals(targetOpts.cvPickerBuffsAndBars.hidden(), true, "Target unit SHOULD hide Buffs/Bars picker")
-    Harness.AssertEquals(playerOpts.cvPickerCooldowns.hidden(), false, "Player unit should NOT hide Cooldowns picker")
-    Harness.AssertEquals(targetOpts.cvPickerCooldowns.hidden(), true, "Target unit SHOULD hide Cooldowns picker")
 end)
 
 Harness.RunTest("3. Injected setter updates trigger and linked spells", function()
@@ -87,7 +85,7 @@ Harness.RunTest("3. Injected setter updates trigger and linked spells", function
     Harness.AssertEquals(linked[2], 26573, "Second linked spell should be 26573")
 end)
 
-Harness.RunTest("4. Add Selected button adds dropdown selection into linked spell IDs", function()
+Harness.RunTest("4. Add Selected Buff button adds chosen tracked buff into linked spell IDs", function()
     local data = {
         id = "TestAddSelectedAura",
         triggers = {
@@ -104,23 +102,22 @@ Harness.RunTest("4. Add Selected button adds dropdown selection into linked spel
 
     local opts = OptionsPrivate.GetBuffTriggerOptions(data, 1)["trigger.1.aura_options"]
 
-    -- Select a cooldown from the dropdown
-    opts.cvPickerCooldowns.set({}, "31884")
-    Harness.AssertEquals(data.triggers[1].trigger._cvPickCooldown, "31884", "Selection stored")
+    -- Select a tracked buff from the dropdown
+    opts.cvPickerBuffsAndBars.set({}, "188370")
+    Harness.AssertEquals(data.triggers[1].trigger._cvPickBuffOrBar, "188370", "Selection stored")
 
-    -- Click Add Selected
+    -- Click Add Selected Buff
     opts.cvPickerAdd.func()
     local linked = data.triggers[1].trigger.cvLinkedSpells
     Harness.Assert(type(linked) == "table", "cvLinkedSpells should be table")
-    Harness.AssertEquals(linked[1], 31884, "Linked spells should now contain 31884")
-    Harness.AssertEquals(data.triggers[1].trigger._cvPickCooldown, "0", "Selection should reset to 0")
+    Harness.AssertEquals(linked[1], 188370, "Linked spells should now contain 188370")
+    Harness.AssertEquals(data.triggers[1].trigger._cvPickBuffOrBar, "0", "Selection should reset to 0")
 end)
 
 Harness.RunTest("5. SyncAuraState pushes rich Cooldown Viewer state (stacks, duration, remaining, charges) into trigger state", function()
     local auraId = "TestAura1"
     local triggernum = 1
 
-    -- Setup active icon in BuffIconCooldownViewer with duration, expiration, and stacks
     local mockIcon = {
         spellID = 26573,
         cooldownUseAuraDisplayTime = true,
@@ -144,21 +141,16 @@ Harness.RunTest("5. SyncAuraState pushes rich Cooldown Viewer state (stacks, dur
     Harness.AssertEquals(state.charges, 5, "State charges should be 5")
     Harness.AssertEquals(state.spellId, 26573, "State spellId should be 26573")
 
-    -- Clean up
     _G.BuffIconCooldownViewer.itemFramePool._icons = {}
 end)
 
-Harness.RunTest("6. Injection hooks M33kAuras.RegisterTriggerSystemOptions directly", function()
-    -- Clear previous options in M33kAuras
+Harness.RunTest("6. Injection hooks M33kAuras.RegisterTriggerSystemOptions directly with only tracked buffs", function()
     _G.M33kAuras._registeredOptions = {}
 
-    -- Force re-initialization with M33kAuras
     local M33K = {}
     Harness.LoadFullAddon(M33K)
     M33K.Injection.Initialize()
 
-    -- Simulate M33kAuras registering aura2 options
-    local capturedOptions = nil
     local mockOptionsGenerator = function(data, triggernum)
         return {
             ["trigger." .. triggernum .. ".aura_options"] = {
@@ -171,7 +163,6 @@ Harness.RunTest("6. Injection hooks M33kAuras.RegisterTriggerSystemOptions direc
 
     Harness.Assert(#_G.M33kAuras._registeredOptions > 0, "Options should be registered in M33kAuras")
 
-    -- Call the registered wrapper and verify injection
     local regWrapper = _G.M33kAuras._registeredOptions[1].fn
     local dummyData = {
         id = "M33kTestAura",
@@ -187,12 +178,12 @@ Harness.RunTest("6. Injection hooks M33kAuras.RegisterTriggerSystemOptions direc
     Harness.Assert(aura_opts.cvHeader ~= nil, "M33kAuras: cvHeader should be injected")
     Harness.Assert(aura_opts.useCooldownViewer ~= nil, "M33kAuras: useCooldownViewer should be injected")
     Harness.Assert(aura_opts.cvPickerBuffsAndBars ~= nil, "M33kAuras: cvPickerBuffsAndBars should be injected")
-    Harness.Assert(aura_opts.cvPickerCooldowns ~= nil, "M33kAuras: cvPickerCooldowns should be injected")
+    Harness.Assert(aura_opts.cvPickerCooldowns == nil, "M33kAuras: cvPickerCooldowns should NOT be injected into Buff trigger")
 end)
 
 Harness.RunTest("7. SyncAuraState pushes state into M33kAuras environment when ThisWeeksAuras is absent", function()
     local savedTWA = _G.ThisWeeksAuras
-    _G.ThisWeeksAuras = nil  -- simulate only M33kAuras running
+    _G.ThisWeeksAuras = nil
 
     local auraId = "SoloM33kAura"
     local triggernum = 1
@@ -216,7 +207,6 @@ Harness.RunTest("7. SyncAuraState pushes state into M33kAuras environment when T
     Harness.AssertEquals(state.charges, 1, "Charges count matches in M33kAuras")
     Harness.AssertEquals(state.spellId, 188370, "Spell ID matches in M33kAuras")
 
-    -- Clean up & restore
     _G.BuffIconCooldownViewer.itemFramePool._icons = {}
     _G.ThisWeeksAuras = savedTWA
 end)

@@ -156,6 +156,16 @@ local function CollectLinkedIDs(info)
     return linkedIDs
 end
 
+-- Check if cooldown flags hide the aura
+local function IsAuraHiddenByFlags(info)
+    if not info or type(info.flags) ~= "number" then return false end
+    local flagsEnum = Enum and Enum.CooldownSetSpellFlags
+    if flagsEnum and flagsEnum.HideAura and bit and bit.band then
+        return bit.band(info.flags, flagsEnum.HideAura) ~= 0
+    end
+    return false
+end
+
 ----------------------------------------------------------------------
 -- Core: IsBuffActive (trigger/untrigger logic)
 -- Returns: active, expirationTime, duration, iconTexture, stacks, matchedSpellID, spellName
@@ -246,7 +256,7 @@ function CDViewer.EnumerateTracked(categoryFilter, buffsOnly)
                             local spellID = NormPublicSpellID(icon.spellID)
                                          or (info and NormPublicSpellID(info.spellID))
 
-                            if spellID then
+                            if spellID and (not info or info.isKnown ~= false) then
                                 local spellName, spellIcon = ResolveSpellDisplay(spellID, icon)
                                 local exp = icon.cooldownExpirationTime or (info and info.cooldownExpirationTime) or 0
                                 local dur = icon.cooldownDuration or (info and info.cooldownDuration) or 0
@@ -276,7 +286,7 @@ end
 
 ----------------------------------------------------------------------
 -- Enumerate via CDM Data API (C_CooldownViewer.GetCooldownViewerCategorySet)
--- Categories: "Essential", "Utility", "TrackedBuff", "TrackedBar"
+-- Uses includeAll = false to ONLY return actively tracked/displayed spells
 ----------------------------------------------------------------------
 function CDViewer.EnumerateFromCDM(category)
     local tracked = {}
@@ -297,13 +307,47 @@ function CDViewer.EnumerateFromCDM(category)
 
     if not catValue then return tracked end
 
+    -- Check CooldownViewerSettings DataProvider first if available
+    local settings = _G.CooldownViewerSettings
+    local dataProvider = settings and settings.GetDataProvider and settings:GetDataProvider()
+    if dataProvider and dataProvider.GetOrderedCooldownIDsForCategory and dataProvider.GetCooldownInfoForID then
+        local ids = dataProvider:GetOrderedCooldownIDsForCategory(catValue, false)
+        if type(ids) == "table" then
+            for _, cid in ipairs(ids) do
+                if not IsValueSecret(cid) then
+                    local info = dataProvider:GetCooldownInfoForID(cid)
+                    if type(info) == "table" and info.isKnown ~= false and not IsAuraHiddenByFlags(info) then
+                        local spellID = NormPublicSpellID(info.spellID) or NormPublicSpellID(info.overrideSpellID)
+                        if spellID then
+                            local spellName, spellIcon = ResolveSpellDisplay(spellID, nil)
+                            tracked[spellID] = {
+                                name = spellName,
+                                icon = spellIcon,
+                                category = category,
+                                viewerName = (category == "TrackedBuff" and "BuffIconCooldownViewer") or (category == "TrackedBar" and "BuffBarCooldownViewer") or (category == "Essential" and "EssentialCooldownViewer") or "UtilityCooldownViewer",
+                                isBuffTimer = (category == "TrackedBuff" or category == "TrackedBar"),
+                                linkedSpellIDs = CollectLinkedIDs(info),
+                                cooldownID = cid,
+                                duration = info.cooldownDuration or 0,
+                                expirationTime = info.cooldownExpirationTime or 0,
+                                stacks = info.charges or info.applications or 0,
+                            }
+                        end
+                    end
+                end
+            end
+            return tracked
+        end
+    end
+
+    -- Standard C_CooldownViewer fallback (includeAll = false to return only tracked spells)
     if not (C_CooldownViewer
         and type(C_CooldownViewer.GetCooldownViewerCategorySet) == "function"
         and type(C_CooldownViewer.GetCooldownViewerCooldownInfo) == "function") then
         return tracked
     end
 
-    local okIDs, ids = pcall(C_CooldownViewer.GetCooldownViewerCategorySet, catValue, true)
+    local okIDs, ids = pcall(C_CooldownViewer.GetCooldownViewerCategorySet, catValue, false)
     if not okIDs or type(ids) ~= "table" then return tracked end
 
     local defaultViewer = "EssentialCooldownViewer"
@@ -316,7 +360,7 @@ function CDViewer.EnumerateFromCDM(category)
         local cid = ids[i]
         if not IsValueSecret(cid) then
             local okInfo, info = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cid)
-            if okInfo and type(info) == "table" then
+            if okInfo and type(info) == "table" and info.isKnown ~= false and not IsAuraHiddenByFlags(info) then
                 local spellID = NormPublicSpellID(info.spellID)
                              or NormPublicSpellID(info.overrideSpellID)
 
@@ -347,12 +391,12 @@ function CDViewer.EnumerateFromCDM(category)
 end
 
 ----------------------------------------------------------------------
--- Enumerate Tracked Buffs & Bars from CDM + Viewers
+-- Enumerate Tracked Buffs & Bars from CDM (ONLY actively tracked)
 ----------------------------------------------------------------------
 function CDViewer.EnumerateTrackedBuffsAndBars()
     local buffsAndBars = {}
 
-    -- 1. CDM Data Layer for TrackedBuff and TrackedBar
+    -- 1. CDM Data Layer for TrackedBuff and TrackedBar (includeAll = false)
     for _, cat in ipairs({ "TrackedBuff", "TrackedBar" }) do
         local fromCDM = CDViewer.EnumerateFromCDM(cat)
         for spellID, entry in pairs(fromCDM) do
@@ -374,12 +418,12 @@ function CDViewer.EnumerateTrackedBuffsAndBars()
 end
 
 ----------------------------------------------------------------------
--- Enumerate Cooldowns: merges Essential + Utility from CDM + viewers
+-- Enumerate Cooldowns: merges Essential + Utility from CDM (ONLY actively tracked)
 ----------------------------------------------------------------------
 function CDViewer.EnumerateCooldowns()
     local cds = {}
 
-    -- 1. CDM Data Layer for Essential and Utility
+    -- 1. CDM Data Layer for Essential and Utility (includeAll = false)
     for _, cat in ipairs({ "Essential", "Utility" }) do
         local fromCDM = CDViewer.EnumerateFromCDM(cat)
         for spellID, entry in pairs(fromCDM) do
