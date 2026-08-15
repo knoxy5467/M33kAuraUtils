@@ -110,13 +110,43 @@ local function ResolveIconStacks(icon)
     return stacks
 end
 
--- Extract icon texture from Blizzard CDM icon
+-- Extract icon texture from Blizzard CDM icon frame.
+-- Full cascade: frame widget → iconTexture → cooldown info → spell API.
 local function ResolveIconTexture(icon)
     if not icon then return nil end
-    local iconTexture = icon.Icon or icon.icon
-    if iconTexture and type(iconTexture.GetTexture) == "function" then
-        return iconTexture:GetTexture()
+
+    -- 1. Frame texture widget (most common CDM layout)
+    local iconWidget = icon.Icon or icon.icon
+    if iconWidget and type(iconWidget.GetTexture) == "function" then
+        local tex = iconWidget:GetTexture()
+        if tex and tex ~= 0 then return tex end
     end
+
+    -- 2. Direct texture fields on the frame
+    if icon.iconTexture and icon.iconTexture ~= 0 then return icon.iconTexture end
+    if icon.texture     and icon.texture     ~= 0 then return icon.texture     end
+
+    -- 3. CDM cooldown info
+    local info = ResolveIconInfo(icon)
+    if info and info.icon and info.icon ~= 0 then return info.icon end
+
+    -- 4. Spell API fallback
+    local spellID = NormPublicSpellID(icon.spellID)
+    if spellID then
+        if C_Spell and type(C_Spell.GetSpellInfo) == "function" then
+            local ok, si = pcall(C_Spell.GetSpellInfo, spellID)
+            if ok and si and si.iconID and si.iconID > 0 then return si.iconID end
+        end
+        if type(GetSpellTexture) == "function" then
+            local tex = GetSpellTexture(spellID)
+            if tex then return tex end
+        end
+        if M33K.Spells and M33K.Spells.GetSpellInfo then
+            local si = M33K.Spells.GetSpellInfo(spellID)
+            if si and si.icon then return si.icon end
+        end
+    end
+
     return nil
 end
 
@@ -209,6 +239,18 @@ function CDViewer.IsBuffActive(targetSpells)
                         local iconTexture = ResolveIconTexture(icon)
                         local stacks = ResolveIconStacks(icon)
                         local name = (M33K.Spells and M33K.Spells.GetSpellInfo(matchedID) and M33K.Spells.GetSpellInfo(matchedID).name) or ("Spell " .. matchedID)
+                        if M33K.Debug then
+                            M33K.Debug("ENGINE", "IsBuffActive MATCH", {
+                                viewer = viewerName,
+                                spellID = icon.spellID,
+                                matchedID = matchedID,
+                                name = name,
+                                exp = exp,
+                                dur = dur,
+                                stacks = stacks,
+                                icon = iconTexture,
+                            })
+                        end
                         return true, exp, dur, iconTexture, stacks, matchedID, name
                     end
                 end
@@ -216,6 +258,9 @@ function CDViewer.IsBuffActive(targetSpells)
         end
     end
 
+    if M33K.Debug then
+        M33K.Debug("ENGINE", "IsBuffActive NO_MATCH", { targetSpells = targetSpells })
+    end
     return false, 0, 0, nil, 0, nil, nil
 end
 
@@ -568,6 +613,100 @@ function CDViewer.GetCDMSpellInfo(spellIdentifier)
 end
 
 ----------------------------------------------------------------------
+-- Resolve icon for a set of target spells from CDM data + spell API.
+-- Does NOT require a live viewer frame — safe to call when inactive.
+-- Returns a valid texture FileID/path, or 136243 (generic spell icon).
+----------------------------------------------------------------------
+function CDViewer.ResolveIconForSpells(targetSpells)
+    local TARGET_SPELLS = NormalizeTargetSpells(targetSpells)
+
+    -- 1. Try live CDM viewer frames first (most accurate)
+    for _, viewerName in ipairs(VIEWERS) do
+        local viewer = _G[viewerName]
+        if viewer and viewer.itemFramePool and type(viewer.itemFramePool.EnumerateActive) == "function" then
+            for icon in viewer.itemFramePool:EnumerateActive() do
+                if icon then
+                    local rawID = NormPublicSpellID(icon.spellID)
+                    if rawID and TARGET_SPELLS[rawID] then
+                        local tex = ResolveIconTexture(icon)
+                        if tex then return tex end
+                    end
+                end
+            end
+        end
+    end
+
+    -- 2. Try CDM data layer
+    if C_CooldownViewer and type(C_CooldownViewer.GetCooldownViewerCooldownIDs) == "function" then
+        local allIDs = {}
+        for _, cat in ipairs({ 1, 2, 3, 4 }) do
+            local ids = {}
+            if type(C_CooldownViewer.GetCooldownViewerCooldownIDsInCategory) == "function" then
+                ids = C_CooldownViewer.GetCooldownViewerCooldownIDsInCategory(cat) or {}
+            end
+            for _, cid in ipairs(ids) do
+                table.insert(allIDs, cid)
+            end
+        end
+        for _, cid in ipairs(allIDs) do
+            if type(C_CooldownViewer.GetCooldownViewerCooldownInfo) == "function" then
+                local ok, info = pcall(C_CooldownViewer.GetCooldownViewerCooldownInfo, cid)
+                if ok and info then
+                    local sid = NormPublicSpellID(info.spellID)
+                    if sid and TARGET_SPELLS[sid] and info.icon then
+                        if M33K.Debug then
+                            M33K.Debug("ICON", "ResolveIconForSpells MATCH_CDM_DATA", { spellID = sid, icon = info.icon })
+                        end
+                        return info.icon
+                    end
+                end
+            end
+        end
+    end
+
+    -- 3. Spell API fallback for each target spell ID
+    for spellID in pairs(TARGET_SPELLS) do
+        if type(spellID) == "number" and spellID > 0 then
+            -- C_Spell.GetSpellInfo (retail)
+            if C_Spell and type(C_Spell.GetSpellInfo) == "function" then
+                local ok, si = pcall(C_Spell.GetSpellInfo, spellID)
+                if ok and si and si.iconID and si.iconID > 0 then
+                    if M33K.Debug then
+                        M33K.Debug("ICON", "ResolveIconForSpells MATCH_C_SPELL", { spellID = spellID, icon = si.iconID })
+                    end
+                    return si.iconID
+                end
+            end
+            -- GetSpellTexture global (classic/compat)
+            if type(GetSpellTexture) == "function" then
+                local tex = GetSpellTexture(spellID)
+                if tex then
+                    if M33K.Debug then
+                        M33K.Debug("ICON", "ResolveIconForSpells MATCH_GET_SPELL_TEXTURE", { spellID = spellID, icon = tex })
+                    end
+                    return tex
+                end
+            end
+            -- M33K.Spells lookup
+            if M33K.Spells and M33K.Spells.GetSpellInfo then
+                local si = M33K.Spells.GetSpellInfo(spellID)
+                if si and si.icon then
+                    if M33K.Debug then
+                        M33K.Debug("ICON", "ResolveIconForSpells MATCH_M33K_SPELLS", { spellID = spellID, icon = si.icon })
+                    end
+                    return si.icon
+                end
+            end
+        end
+    end
+
+    if M33K.Debug then
+        M33K.Debug("ICON", "ResolveIconForSpells FALLBACK_DEFAULT", { targetSpells = targetSpells, icon = 136243 })
+    end
+    return 136243  -- generic fallback
+end
+
+----------------------------------------------------------------------
 -- Global exports
 ----------------------------------------------------------------------
 _G.M33kAuraUtils.IsBuffActive = CDViewer.IsBuffActive
@@ -580,6 +719,7 @@ _G.M33kAuraUtils.EnumerateTrackedBuffsAndBars = CDViewer.EnumerateTrackedBuffsAn
 _G.M33kAuraUtils.EnumerateCooldowns = CDViewer.EnumerateCooldowns
 _G.M33kAuraUtils.EnumerateAll = CDViewer.EnumerateAll
 _G.M33kAuraUtils.GetCDMSpellInfo = CDViewer.GetCDMSpellInfo
+_G.M33kAuraUtils.ResolveIconForSpells = CDViewer.ResolveIconForSpells
 
 ----------------------------------------------------------------------
 -- Engine wrapper for lifecycle events and callback subscriptions

@@ -19,12 +19,18 @@ local function OnEvent(self, event, arg1, ...)
             if M33K.IntegTest and M33K.IntegTest.InitializeSlashHooks then
                 M33K.IntegTest.InitializeSlashHooks()
             end
+            if M33K.Info then
+                M33K.Info("CORE", "M33kAuraUtils core initialized.")
+            end
         elseif arg1 == "ThisWeeksAurasOptions" or arg1 == "WeakAurasOptions" or arg1 == "M33kAurasOptions" or arg1 == "ThisWeeksAuras" or arg1 == "WeakAuras" or arg1 == "M33kAuras" then
             if M33K.Injection and M33K.Injection.Initialize then
                 M33K.Injection.Initialize()
             end
             if M33K.IntegTest and M33K.IntegTest.InitializeSlashHooks then
                 M33K.IntegTest.InitializeSlashHooks()
+            end
+            if M33K.Info then
+                M33K.Info("CORE", "Re-initialized hooks for loaded addon: " .. tostring(arg1))
             end
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
@@ -34,12 +40,18 @@ local function OnEvent(self, event, arg1, ...)
         if M33K.IntegTest and M33K.IntegTest.InitializeSlashHooks then
             M33K.IntegTest.InitializeSlashHooks()
         end
+        if M33K.Info then
+            M33K.Info("CORE", "PLAYER_ENTERING_WORLD: hooks verified.")
+        end
     elseif event == "UNIT_AURA"
         or event == "SPELL_UPDATE_COOLDOWN"
         or event == "SPELL_UPDATE_CHARGES"
         or event == "SPELL_UPDATE_USABLE" then
         -- Drive CDM buff/spell state into WA on the same events WA itself uses,
         -- so our injected trigger behaves identically to the native trigger path.
+        if M33K.Debug then
+            M33K.Debug("CORE", "Event fired: " .. tostring(event), { arg1 = arg1 })
+        end
         if M33K.Injection and M33K.Injection.SyncAllHookedAuras then
             M33K.Injection.SyncAllHookedAuras()
         end

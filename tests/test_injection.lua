@@ -160,6 +160,8 @@ Harness.RunTest("5. SyncAuraState pushes rich Cooldown Viewer state (stacks, dur
     Harness.Assert(stateInactive.expirationTime == nil, "Inactive: stale expirationTime must be cleared")
     Harness.Assert(stateInactive.duration == nil, "Inactive: stale duration must be cleared")
     Harness.Assert(stateInactive.progressType == nil, "Inactive: stale progressType must be cleared")
+    -- Icon must persist on the inactive state so WA can display it even when not triggered
+    Harness.Assert(stateInactive.icon ~= nil, "Inactive: icon must not be cleared (always needed for display)")
     -- WA positioning key must still survive the inactive clear
     Harness.AssertEquals(stateInactive._waPositionKey, "PRESERVED", "Inactive: WA positioning key must still be preserved")
 

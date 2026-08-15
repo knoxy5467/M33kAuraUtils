@@ -13,6 +13,25 @@ function Options.HandleSlashCommand(msg)
         local current = M33K.Database.GetSetting("debug")
         M33K.Database.SetSetting("debug", not current)
         print("|cFF00B4FFM33kAuraUtils|r: Debug mode is now " .. (not current and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r"))
+        if M33K.Logger and M33K.Logger.Info then
+            M33K.Logger.Info("OPTIONS", "Debug mode toggled " .. (not current and "ON" or "OFF"))
+        end
+    elseif cmd == "dump" or cmd == "logs" or cmd == "export" then
+        if M33K.Logger and M33K.Logger.ShowExportWindow then
+            M33K.Logger.ShowExportWindow()
+        else
+            print("|cFF00B4FFM33kAuraUtils|r: Logger export window not available.")
+        end
+    elseif cmd == "snapshot" then
+        if M33K.Logger and M33K.Logger.CaptureSnapshot then
+            local snap = M33K.Logger.CaptureSnapshot("User Slash Command")
+            print("|cFF00B4FFM33kAuraUtils|r: Captured system snapshot into SavedVariables (M33kAuraUtilsDB.snapshots). Saved to WTF on /reload.")
+        end
+    elseif cmd == "clearlogs" or cmd == "clear" then
+        if M33K.Logger and M33K.Logger.ClearLogs then
+            M33K.Logger.ClearLogs()
+            print("|cFF00B4FFM33kAuraUtils|r: All debug logs cleared.")
+        end
     elseif cmd == "integ" or cmd == "test" or cmd == "integration" then
         if M33K.IntegTest and M33K.IntegTest.RunInClientTests then
             M33K.IntegTest.RunInClientTests()
@@ -22,9 +41,16 @@ function Options.HandleSlashCommand(msg)
             print("|cFF00B4FFM33kAuraUtils|r: Integration test module not loaded.")
         end
     elseif cmd == "status" or cmd == "info" then
-        print("|cFF00B4FFM33kAuraUtils|r: Active and integrated with Blizzard Cooldown Viewer.")
+        local logCount = M33K.Logger and #M33K.Logger.GetLogs() or 0
+        local debugOn = M33K.Database and M33K.Database.GetSetting("debug") or false
+        print(string.format("|cFF00B4FFM33kAuraUtils|r: Active. Debug: %s | Buffered Logs: %d entries. Type |cFF00FF00/m33k logs|r to view.", debugOn and "|cFF00FF00ON|r" or "|cFFFF0000OFF|r", logCount))
     else
-        print("|cFF00B4FFM33kAuraUtils|r: Blizzard Cooldown Viewer & Aura integration active. Type |cFF00FF00/wa integ|r or |cFF00FF00/m33k integ|r to run in-client integration tests.")
+        print("|cFF00B4FFM33kAuraUtils Commands:|r")
+        print("  |cFF00FF00/m33k debug|r - Toggle verbose chat debug logging")
+        print("  |cFF00FF00/m33k logs|r - Open copyable diagnostics and state logs window")
+        print("  |cFF00FF00/m33k snapshot|r - Capture instant state snapshot into SavedVariables")
+        print("  |cFF00FF00/m33k clearlogs|r - Clear buffered debug logs")
+        print("  |cFF00FF00/m33k integ|r - Run in-client integration test suite")
     end
 end
 

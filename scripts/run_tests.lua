@@ -53,6 +53,7 @@ local luaFiles = {
     "Locales/Locales.lua",
     "Spells.lua",
     "Database.lua",
+    "Logger.lua",
     "Engine.lua",
     "UI.lua",
     "Options.lua",
@@ -63,6 +64,7 @@ local luaFiles = {
     "tests/test_harness.lua",
     "tests/test_engine.lua",
     "tests/test_database.lua",
+    "tests/test_logger.lua",
     "tests/test_ui.lua",
     "tests/test_injection.lua",
     "tests/test_integ_runner.lua",
@@ -98,16 +100,19 @@ dofile("tests/test_engine.lua")
 -- Suite 2: Database Tests
 dofile("tests/test_database.lua")
 
--- Suite 3: UI & Visual Handler Tests
+-- Suite 3: Logger & Diagnostics Tests
+dofile("tests/test_logger.lua")
+
+-- Suite 4: UI & Visual Handler Tests
 dofile("tests/test_ui.lua")
 
--- Suite 4: Cross-Addon Injection & Hook Tests
+-- Suite 5: Cross-Addon Injection & Hook Tests
 dofile("tests/test_injection.lua")
 
--- Suite 5: In-Client Integration Test Runner Tests
+-- Suite 6: In-Client Integration Test Runner Tests
 dofile("tests/test_integ_runner.lua")
 
--- Suite 6: Secret Access Tests
+-- Suite 7: Secret Access Tests
 dofile("tests/test_secret_access.lua")
 
 local passed, failed = Harness.GetSummary()

@@ -460,7 +460,9 @@ end
 local TRIGGER_FIELDS = {
     "show", "changed", "progressType",
     "duration", "expirationTime", "total", "remaining",
-    "icon", "stacks", "applications", "charges", "maxCharges",
+    -- icon is intentionally excluded: it must always be set so WA can show
+    -- the correct icon in both active and inactive states.
+    "stacks", "applications", "charges", "maxCharges",
     "value", "spellId", "name",
     "usable", "notEnoughPower", "onCooldown",
 }
@@ -478,6 +480,11 @@ function Injection.SyncAuraState(auraId, triggernum, targetSpells)
     if #frameworks == 0 then return end
 
     local active, exp, dur, icon, stacks, matchedID, name = M33K.CooldownViewer.IsBuffActive(targetSpells)
+    -- Always resolve icon from CDM so it's correct whether active or inactive.
+    -- ResolveIconForSpells cascades: live frame → CDM info → spell API.
+    local resolvedIcon = (icon and icon ~= 0 and icon)
+                      or M33K.CooldownViewer.ResolveIconForSpells(targetSpells)
+                      or 136243
 
     for _, WA in ipairs(frameworks) do
         if WA and WA.GetTriggerStateForTrigger then
@@ -487,6 +494,10 @@ function Injection.SyncAuraState(auraId, triggernum, targetSpells)
                 -- (position, anchor, size, etc.) that WA writes onto this table.
                 local s = allStates[""] or {}
                 allStates[""] = s
+
+                -- Icon is always set regardless of active/inactive so WA can display
+                -- the correct spell icon in both triggered and untriggered states.
+                s.icon = resolvedIcon
 
                 if active then
                     local now = GetTime and GetTime() or 0
@@ -499,19 +510,41 @@ function Injection.SyncAuraState(auraId, triggernum, targetSpells)
                     s.expirationTime = exp or 0
                     s.total = dur or 0
                     s.remaining = rem
-                    s.icon = icon or 136243
                     s.stacks = stacks or 0
                     s.applications = stacks or 0
                     s.charges = stacks or 0
                     s.value = stacks or 0
                     s.spellId = matchedID
                     s.name = name or ("Spell " .. (matchedID or 0))
+
+                    if M33K.Debug then
+                        M33K.Debug("INJECTION", "SyncAuraState ACTIVE", {
+                            auraId = auraId,
+                            triggernum = triggernum,
+                            matchedID = matchedID,
+                            name = s.name,
+                            icon = s.icon,
+                            duration = s.duration,
+                            expirationTime = s.expirationTime,
+                            stacks = s.stacks,
+                        })
+                    end
                 else
-                    -- Clear all stale trigger fields so WA doesn't keep the timer alive.
-                    -- WA-managed positioning keys on the table are left intact.
+                    -- Clear stale timer/stack fields so WA doesn't keep the timer alive.
+                    -- icon is preserved above; WA positioning keys are untouched.
                     ClearTriggerFields(s)
+                    s.icon = resolvedIcon  -- restore after clear
                     s.show = false
                     s.changed = true
+
+                    if M33K.Debug then
+                        M33K.Debug("INJECTION", "SyncAuraState INACTIVE", {
+                            auraId = auraId,
+                            triggernum = triggernum,
+                            icon = s.icon,
+                            targetSpells = targetSpells,
+                        })
+                    end
                 end
 
                 if WA.UpdatedTriggerState then
@@ -530,6 +563,10 @@ function Injection.SyncSpellState(auraId, triggernum, targetSpells, ignoreGCD)
     if #frameworks == 0 then return end
 
     local isUsable, notEnoughPower, onCooldown, start, dur, exp, charges, maxCharges, icon, matchedID, name = M33K.CooldownViewer.IsSpellUsable(targetSpells, ignoreGCD)
+    -- Always resolve icon so it's correct in both usable and on-cooldown states.
+    local resolvedIcon = (icon and icon ~= 0 and icon)
+                      or M33K.CooldownViewer.ResolveIconForSpells(targetSpells)
+                      or 136243
 
     for _, WA in ipairs(frameworks) do
         if WA and WA.GetTriggerStateForTrigger then
@@ -543,12 +580,25 @@ function Injection.SyncSpellState(auraId, triggernum, targetSpells, ignoreGCD)
                 local now = GetTime and GetTime() or 0
                 local rem = (exp and exp > now) and (exp - now) or 0
 
+                -- Icon is always set so WA displays the correct spell icon
+                -- regardless of whether the spell is on cooldown or ready.
+                s.icon = resolvedIcon
+
                 if not isUsable then
-                    -- Clear all stale trigger fields so WA untriggers cleanly.
-                    -- WA-managed positioning keys on the table are left intact.
+                    -- Clear stale timer fields. icon is preserved above.
                     ClearTriggerFields(s)
+                    s.icon = resolvedIcon  -- restore after clear
                     s.show = false
                     s.changed = true
+
+                    if M33K.Debug then
+                        M33K.Debug("INJECTION", "SyncSpellState NOT_USABLE", {
+                            auraId = auraId,
+                            triggernum = triggernum,
+                            icon = s.icon,
+                            onCooldown = onCooldown,
+                        })
+                    end
                 else
                     s.show = true
                     s.changed = true
@@ -560,13 +610,24 @@ function Injection.SyncSpellState(auraId, triggernum, targetSpells, ignoreGCD)
                     s.expirationTime = exp or 0
                     s.total = dur or 0
                     s.remaining = rem
-                    s.icon = icon or 136243
                     s.charges = charges or 0
                     s.maxCharges = maxCharges or 0
                     s.stacks = charges or 0
                     s.value = charges or 0
                     s.spellId = matchedID
                     s.name = name or ("Spell " .. (matchedID or 0))
+
+                    if M33K.Debug then
+                        M33K.Debug("INJECTION", "SyncSpellState USABLE", {
+                            auraId = auraId,
+                            triggernum = triggernum,
+                            matchedID = matchedID,
+                            name = s.name,
+                            icon = s.icon,
+                            duration = s.duration,
+                            charges = s.charges,
+                        })
+                    end
                 end
 
                 if WA.UpdatedTriggerState then
@@ -656,6 +717,9 @@ function Injection.Initialize()
         end
     end
 
+    if M33K.Info then
+        M33K.Info("INJECTION", "Initialized framework hooks across " .. #frameworks .. " framework(s).")
+    end
     return true
 end
 
@@ -664,10 +728,24 @@ function Injection.RegisterHookedAura(auraId, triggernum, targetSpells)
         triggernum = triggernum,
         targetSpells = targetSpells,
     }
+    if M33K.Debug then
+        M33K.Debug("INJECTION", "RegisterHookedAura", { auraId = auraId, triggernum = triggernum, targetSpells = targetSpells })
+    end
 end
 
 function Injection.UnregisterHookedAura(auraId)
     hookedAuras[auraId] = nil
+    if M33K.Debug then
+        M33K.Debug("INJECTION", "UnregisterHookedAura", { auraId = auraId })
+    end
+end
+
+function Injection.GetHookedAuras()
+    local copy = {}
+    for k, v in pairs(hookedAuras) do
+        copy[k] = v
+    end
+    return copy
 end
 
 ----------------------------------------------------------------------
@@ -675,7 +753,12 @@ end
 -- events so CDM buff state flows through the regular WA evaluation path.
 ----------------------------------------------------------------------
 function Injection.SyncAllHookedAuras()
+    local count = 0
     for auraId, info in pairs(hookedAuras) do
+        count = count + 1
         Injection.SyncAuraState(auraId, info.triggernum, info.targetSpells)
+    end
+    if M33K.Debug and count > 0 then
+        M33K.Debug("INJECTION", "SyncAllHookedAuras completed", { count = count })
     end
 end

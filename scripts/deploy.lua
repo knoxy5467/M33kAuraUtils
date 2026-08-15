@@ -71,6 +71,7 @@ function Deployer.Deploy(customPath)
         { src = "Locales/Locales.lua", dst = targetAddonDir .. "/Locales/Locales.lua" },
         { src = "Spells.lua", dst = targetAddonDir .. "/Spells.lua" },
         { src = "Database.lua", dst = targetAddonDir .. "/Database.lua" },
+        { src = "Logger.lua", dst = targetAddonDir .. "/Logger.lua" },
         { src = "Engine.lua", dst = targetAddonDir .. "/Engine.lua" },
         { src = "UI.lua", dst = targetAddonDir .. "/UI.lua" },
         { src = "Options.lua", dst = targetAddonDir .. "/Options.lua" },
