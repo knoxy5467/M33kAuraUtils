@@ -231,3 +231,73 @@ Harness.RunTest("12. EnumerateAll provides complete union across all 4 CDM categ
     _G.C_CooldownViewer._categorySets[3] = {}
     _G.C_CooldownViewer._categorySets[4] = {}
 end)
+
+Harness.RunTest("13. IsSpellUsable evaluates ready state, power checks, and charges", function()
+    -- Mock Spell 31884 (Avenging Wrath) - Ready & Usable
+    _G.C_Spell._cooldowns[31884] = { startTime = 0, duration = 0, isEnabled = true }
+    _G.C_Spell._charges[31884] = { currentCharges = 1, maxCharges = 1, cooldownDuration = 0 }
+
+    local usable, notEnoughPower, onCD, start, dur, exp, charges, maxCharges = M33K.CooldownViewer.IsSpellUsable(31884)
+    Harness.AssertEquals(usable, true, "Ready spell should be usable")
+    Harness.AssertEquals(notEnoughPower, false, "Should not be out of power")
+    Harness.AssertEquals(onCD, false, "Should not be on cooldown")
+    Harness.AssertEquals(charges, 1, "Charges should be 1")
+
+    -- Clean up
+    _G.C_Spell._cooldowns[31884] = nil
+    _G.C_Spell._charges[31884] = nil
+end)
+
+Harness.RunTest("14. IsSpellUsable respects real cooldowns while optionally ignoring GCD", function()
+    -- Set current time to 1000.0
+    Harness.SetTime(1000.0)
+
+    -- Mock Spell 633 (Lay on Hands) - On real cooldown (duration 300s, starts at 950s)
+    _G.C_Spell._cooldowns[633] = { startTime = 950.0, duration = 300.0, isEnabled = true }
+    local usable, notEnoughPower, onCD, start, dur, exp = M33K.CooldownViewer.IsSpellUsable(633)
+    Harness.AssertEquals(usable, false, "Spell on real cooldown should not be usable")
+    Harness.AssertEquals(onCD, true, "Should report on cooldown")
+    Harness.AssertEquals(exp, 1250.0, "Expiration time should be 1250.0")
+
+    -- Mock Spell on GCD only (duration 1.5s, starts at 999.5s)
+    _G.C_Spell._cooldowns[853] = { startTime = 999.5, duration = 1.5, isEnabled = true }
+    local usableGCD, _, onCDWithGCD = M33K.CooldownViewer.IsSpellUsable(853, false)
+    local usableIgnoreGCD, _, onCDIgnoreGCD = M33K.CooldownViewer.IsSpellUsable(853, true)
+
+    Harness.AssertEquals(onCDWithGCD, true, "On cooldown when GCD is NOT ignored")
+    Harness.AssertEquals(onCDIgnoreGCD, false, "NOT on cooldown when GCD is ignored")
+    Harness.AssertEquals(usableIgnoreGCD, true, "Usable when GCD is ignored")
+
+    -- Clean up
+    _G.C_Spell._cooldowns[633] = nil
+    _G.C_Spell._cooldowns[853] = nil
+end)
+
+Harness.RunTest("15. IsSpellUsable extracts live charge counts from CDM viewer icon", function()
+    local mockIcon = {
+        spellID = 26573,
+        cooldownUseAuraDisplayTime = false,
+        ChargeCount = { Current = 2 },
+        IsShown = function() return true end,
+    }
+    _G.EssentialCooldownViewer.itemFramePool._icons = { mockIcon }
+
+    local usable, _, onCD, _, _, _, charges = M33K.CooldownViewer.IsSpellUsable(26573)
+    Harness.AssertEquals(charges, 2, "Charges should be extracted from CDM ChargeCount frame")
+
+    _G.EssentialCooldownViewer.itemFramePool._icons = {}
+end)
+
+Harness.RunTest("16. GetSpellCooldownState returns full cooldown progress payload", function()
+    Harness.SetTime(1000.0)
+    _G.C_Spell._cooldowns[31884] = { startTime = 980.0, duration = 120.0, isEnabled = true }
+
+    local onCD, start, dur, exp, charges, maxCharges, isEnabled, icon, id, name = M33K.CooldownViewer.GetSpellCooldownState(31884)
+    Harness.AssertEquals(onCD, true, "Should report on cooldown")
+    Harness.AssertEquals(start, 980.0, "Start time matches")
+    Harness.AssertEquals(dur, 120.0, "Duration matches")
+    Harness.AssertEquals(exp, 1100.0, "Expiration time matches")
+    Harness.AssertEquals(id, 31884, "Spell ID matches")
+
+    _G.C_Spell._cooldowns[31884] = nil
+end)

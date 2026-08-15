@@ -469,6 +469,91 @@ function CDViewer.EnumerateAll()
 end
 
 ----------------------------------------------------------------------
+-- Spell Usability: Evaluates if a spell is usable considering CDM state, cooldowns & resources
+-- Returns: isUsable, notEnoughPower, onCooldown, startTime, duration, expirationTime, charges, maxCharges, icon, matchedID, name
+----------------------------------------------------------------------
+function CDViewer.IsSpellUsable(targetSpells, ignoreGCD)
+    local TARGET_SPELLS = NormalizeTargetSpells(targetSpells)
+
+    for spellID in pairs(TARGET_SPELLS) do
+        if type(spellID) == "number" then
+            local name, icon = ResolveSpellDisplay(spellID, nil)
+
+            -- 1. Check native spell usability (power / resource check)
+            local isUsable, notEnoughPower = true, false
+            if C_Spell and C_Spell.IsSpellUsable then
+                isUsable, notEnoughPower = C_Spell.IsSpellUsable(spellID)
+            elseif IsUsableSpell then
+                isUsable, notEnoughPower = IsUsableSpell(spellID)
+            end
+
+            -- 2. Check charges
+            local charges, maxCharges, chargeStart, chargeDur = 0, 0, 0, 0
+            if M33K.Spells and M33K.Spells.GetCharges then
+                charges, maxCharges, chargeStart, chargeDur = M33K.Spells.GetCharges(spellID)
+            end
+
+            -- 3. Check cooldown & GCD
+            local cdStart, cdDur, cdEnabled, modRate = 0, 0, true, 1.0
+            if M33K.Spells and M33K.Spells.GetCooldown then
+                cdStart, cdDur, cdEnabled, modRate = M33K.Spells.GetCooldown(spellID)
+            end
+
+            -- 4. Check Blizzard CDM viewer icon state if available
+            for _, viewerName in ipairs({ "EssentialCooldownViewer", "UtilityCooldownViewer" }) do
+                local viewer = _G[viewerName]
+                if viewer and viewer.itemFramePool and type(viewer.itemFramePool.EnumerateActive) == "function" then
+                    for item in viewer.itemFramePool:EnumerateActive() do
+                        if item and (not item.IsShown or item:IsShown()) then
+                            local info = ResolveIconInfo(item)
+                            local rawID = NormPublicSpellID(item.spellID)
+                            local isMatch = (rawID == spellID)
+                                         or (info and (info.spellID == spellID or info.overrideSpellID == spellID))
+
+                            if isMatch then
+                                if item.ChargeCount and item.ChargeCount.Current then
+                                    local c = tonumber(item.ChargeCount.Current)
+                                    if c and c > 0 then charges = c end
+                                end
+                                if item.cooldownDuration and item.cooldownDuration > 0 then
+                                    cdDur = item.cooldownDuration
+                                    cdStart = (item.cooldownExpirationTime or 0) - cdDur
+                                end
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- Evaluate ready state
+            local now = GetTime and GetTime() or 0
+            local exp = (cdStart > 0 and cdDur > 0) and (cdStart + cdDur) or 0
+            local rem = (exp > now) and (exp - now) or 0
+
+            local isOnGCD = (cdDur > 0 and cdDur <= 1.5 and rem > 0)
+            local onRealCooldown = (rem > 0) and (not isOnGCD or not ignoreGCD)
+
+            local ready = (not onRealCooldown) or (maxCharges > 0 and charges > 0)
+            local fullyUsable = isUsable and ready and not notEnoughPower
+
+            return fullyUsable, notEnoughPower, onRealCooldown, cdStart, cdDur, exp, charges, maxCharges, icon, spellID, name
+        end
+    end
+
+    return false, false, false, 0, 0, 0, 0, 0, nil, nil, nil
+end
+
+----------------------------------------------------------------------
+-- Spell Cooldown State: Evaluates cooldown progress for spell triggers
+-- Returns: onCooldown, startTime, duration, expirationTime, charges, maxCharges, isEnabled, icon, matchedID, name
+----------------------------------------------------------------------
+function CDViewer.GetSpellCooldownState(targetSpells, ignoreGCD)
+    local usable, notEnoughPower, onCooldown, start, dur, exp, charges, maxCharges, icon, spellID, name = CDViewer.IsSpellUsable(targetSpells, ignoreGCD)
+    return onCooldown, start, dur, exp, charges, maxCharges, true, icon, spellID, name
+end
+
+----------------------------------------------------------------------
 -- Query detailed spell information from CDM & C_Spell
 ----------------------------------------------------------------------
 function CDViewer.GetCDMSpellInfo(spellIdentifier)
@@ -503,6 +588,8 @@ end
 ----------------------------------------------------------------------
 _G.M33kAuraUtils.IsBuffActive = CDViewer.IsBuffActive
 _G.M33kAuraUtils.IsCooldownViewerBuffActive = CDViewer.IsBuffActive
+_G.M33kAuraUtils.IsSpellUsable = CDViewer.IsSpellUsable
+_G.M33kAuraUtils.GetSpellCooldownState = CDViewer.GetSpellCooldownState
 _G.M33kAuraUtils.EnumerateTracked = CDViewer.EnumerateTracked
 _G.M33kAuraUtils.EnumerateFromCDM = CDViewer.EnumerateFromCDM
 _G.M33kAuraUtils.EnumerateTrackedBuffsAndBars = CDViewer.EnumerateTrackedBuffsAndBars
@@ -532,4 +619,8 @@ end
 
 function Engine.CheckAura(targetSpells)
     return CDViewer.IsBuffActive(targetSpells)
+end
+
+function Engine.CheckSpellUsable(targetSpells, ignoreGCD)
+    return CDViewer.IsSpellUsable(targetSpells, ignoreGCD)
 end

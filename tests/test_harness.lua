@@ -252,7 +252,14 @@ function Harness.SetupEnvironment()
                     unit = { type = "select", name = "Unit" },
                 }
             }
-        end
+        end,
+        GetSpellTriggerOptions = function(data, triggernum)
+            return {
+                ["trigger." .. triggernum .. ".spell_options"] = {
+                    spellName = { type = "input", name = "Spell" },
+                }
+            }
+        end,
     }
 end
 

@@ -9,7 +9,7 @@ local hookedAuras = {}
 
 -- Build dropdown values from a tracked entries table
 local function BuildDropdownValues(tracked, defaultLabel)
-    local vals = { ["0"] = defaultLabel or "-- Select a tracked spell --" }
+    local vals = { ["0"] = defaultLabel or "-- Select a spell --" }
     if not tracked then return vals end
 
     for spellID, entry in pairs(tracked) do
@@ -35,6 +35,9 @@ local function BuildDropdownValues(tracked, defaultLabel)
     return vals
 end
 
+----------------------------------------------------------------------
+-- Buff Trigger Options Wrapper (for aura2 triggers)
+----------------------------------------------------------------------
 function Injection.WrapBuffTriggerOptions(origFunc)
     return function(data, triggernum)
         local optionsTable = origFunc and origFunc(data, triggernum)
@@ -48,7 +51,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
             local WA = _G.ThisWeeksAuras or _G.M33kAuras or _G.WeakAuras
             local dw = WA and WA.doubleWidth or 2
 
-            -- Inject Cooldown Viewer Header
+            -- Header
             aura_options.cvHeader = {
                 type = "header",
                 name = "|cFF00B4FFBlizzard Cooldown Manager Tracking (M33kAuraUtils)|r",
@@ -58,7 +61,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 end,
             }
 
-            -- Inject Cooldown Viewer Toggle
+            -- Enable Toggle
             aura_options.useCooldownViewer = {
                 type = "toggle",
                 name = "Enable Cooldown Viewer Tracking",
@@ -120,7 +123,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 end,
             }
 
-            -- Dropdown: Tracked Buffs & Bars (strictly for aura/buff triggers)
+            -- Dropdown: Tracked Buffs & Bars
             aura_options.cvPickerBuffsAndBars = {
                 type = "select",
                 name = "Select Tracked Buff / Bar",
@@ -141,7 +144,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 set = function(info, v) trigger._cvPickBuffOrBar = v end,
             }
 
-            -- Button: Add Selected Spell
+            -- Button: Add Selected Buff
             aura_options.cvPickerAdd = {
                 type = "execute",
                 name = "Add Selected Buff",
@@ -215,6 +218,194 @@ function Injection.WrapBuffTriggerOptions(origFunc)
     end
 end
 
+----------------------------------------------------------------------
+-- Spell Trigger Options Wrapper (for spell/action triggers)
+----------------------------------------------------------------------
+function Injection.WrapSpellTriggerOptions(origFunc)
+    return function(data, triggernum)
+        local optionsTable = origFunc and origFunc(data, triggernum)
+        if not optionsTable then return optionsTable end
+
+        local trigger = data.triggers and data.triggers[triggernum] and data.triggers[triggernum].trigger
+        if not trigger then return optionsTable end
+
+        local spell_options = optionsTable["trigger." .. triggernum .. ".spell_options"]
+                           or optionsTable["trigger." .. triggernum .. ".aura_options"]
+                           or optionsTable
+
+        if spell_options then
+            local WA = _G.ThisWeeksAuras or _G.M33kAuras or _G.WeakAuras
+            local dw = WA and WA.doubleWidth or 2
+
+            -- Header
+            spell_options.cvHeader = {
+                type = "header",
+                name = "|cFF00B4FFBlizzard Cooldown Manager Tracking (M33kAuraUtils)|r",
+                order = 50.0,
+                hidden = function()
+                    return not (trigger.type == "spell" or trigger.type == "status")
+                end,
+            }
+
+            -- Enable Toggle
+            spell_options.useCooldownViewer = {
+                type = "toggle",
+                name = "Enable Cooldown Viewer Tracking",
+                desc = "Tracks spell cooldowns, charges, and usability through Blizzard Cooldown Manager (Essential & Utility Viewers).",
+                order = 50.1,
+                width = dw,
+                hidden = function()
+                    return not (trigger.type == "spell" or trigger.type == "status")
+                end,
+                get = function() return trigger.useCooldownViewer end,
+                set = function(info, v)
+                    trigger.useCooldownViewer = v
+                    if WA and WA.Add then WA.Add(data) end
+                    if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
+                end,
+            }
+
+            -- Linked Spell IDs (manual input)
+            spell_options.cvLinkedSpells = {
+                type = "input",
+                name = "Linked Spell IDs",
+                desc = "Comma-separated list of spell IDs to track in Cooldown Manager.",
+                order = 50.2,
+                width = dw,
+                hidden = function()
+                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
+                end,
+                get = function()
+                    if type(trigger.cvLinkedSpells) == "table" then
+                        return table.concat(trigger.cvLinkedSpells, ", ")
+                    end
+                    return tostring(trigger.cvLinkedSpells or "")
+                end,
+                set = function(info, v)
+                    local list = {}
+                    for id in string.gmatch(v or "", "(%d+)") do
+                        table.insert(list, tonumber(id))
+                    end
+                    trigger.cvLinkedSpells = list
+                    if WA and WA.Add then WA.Add(data) end
+                end,
+            }
+
+            -- Checkbox: Show Untracked Cooldowns
+            spell_options.cvShowAllCooldowns = {
+                type = "toggle",
+                name = "Show Untracked Cooldowns",
+                desc = "When checked, includes all cooldowns from the Blizzard Cooldown Manager database, even if not currently tracked on your bars.",
+                order = 50.3,
+                width = dw,
+                hidden = function()
+                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
+                end,
+                get = function() return trigger.cvShowAllCooldowns == true end,
+                set = function(info, v)
+                    trigger.cvShowAllCooldowns = v
+                    if WA and WA.Add then WA.Add(data) end
+                    if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
+                end,
+            }
+
+            -- Dropdown: Essential & Utility Cooldowns
+            spell_options.cvPickerCooldowns = {
+                type = "select",
+                name = "Select Tracked Cooldown",
+                desc = "Shows essential and utility cooldowns from your Blizzard Cooldown Manager.",
+                order = 50.4,
+                width = dw,
+                hidden = function()
+                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
+                end,
+                values = function()
+                    if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateCooldowns then
+                        local includeAll = (trigger.cvShowAllCooldowns == true)
+                        return BuildDropdownValues(M33K.CooldownViewer.EnumerateCooldowns(includeAll), "-- Select Cooldown --")
+                    end
+                    return { ["0"] = "-- No cooldowns found --" }
+                end,
+                get = function() return trigger._cvPickCooldown or "0" end,
+                set = function(info, v) trigger._cvPickCooldown = v end,
+            }
+
+            -- Button: Add Selected Cooldown
+            spell_options.cvPickerAdd = {
+                type = "execute",
+                name = "Add Selected Cooldown",
+                desc = "Sets the chosen cooldown spell as the active tracked spell.",
+                order = 50.5,
+                width = dw,
+                hidden = function()
+                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
+                end,
+                func = function()
+                    local sel = tonumber(trigger._cvPickCooldown)
+                    if sel and sel ~= 0 then
+                        trigger.spellName = sel
+                        trigger.spellId = sel
+                        if type(trigger.cvLinkedSpells) ~= "table" then
+                            trigger.cvLinkedSpells = {}
+                        end
+
+                        local isDup = false
+                        for _, existing in ipairs(trigger.cvLinkedSpells) do
+                            if existing == sel then isDup = true; break end
+                        end
+                        if not isDup then
+                            table.insert(trigger.cvLinkedSpells, sel)
+                        end
+
+                        -- Auto-add linked/override IDs
+                        if M33K.CooldownViewer then
+                            local all = M33K.CooldownViewer.EnumerateAll()
+                            local entry = all[sel]
+                            if entry and type(entry.linkedSpellIDs) == "table" then
+                                for _, lid in ipairs(entry.linkedSpellIDs) do
+                                    local lidDup = false
+                                    for _, existing in ipairs(trigger.cvLinkedSpells) do
+                                        if existing == lid then lidDup = true; break end
+                                    end
+                                    if not lidDup then
+                                        table.insert(trigger.cvLinkedSpells, lid)
+                                    end
+                                end
+                            end
+                        end
+
+                        trigger._cvPickCooldown = "0"
+
+                        if WA then
+                            if WA.Add then WA.Add(data) end
+                            if WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
+                        end
+                    end
+                end,
+            }
+
+            -- Button: Refresh Cooldowns
+            spell_options.cvPickerRefresh = {
+                type = "execute",
+                name = "|cFF00B4FFRefresh Cooldowns|r",
+                desc = "Re-scans the Blizzard Cooldown Manager for cooldowns.",
+                order = 50.6,
+                width = dw,
+                hidden = function()
+                    return not ((trigger.type == "spell" or trigger.type == "status") and trigger.useCooldownViewer)
+                end,
+                func = function()
+                    if WA and WA.ClearAndUpdateOptions then
+                        WA.ClearAndUpdateOptions(data.id)
+                    end
+                end,
+            }
+        end
+
+        return optionsTable
+    end
+end
+
 function Injection.BuildTargetSpellList(trigger)
     local targets = {}
     if trigger.spellId then targets[trigger.spellId] = true end
@@ -236,6 +427,9 @@ local function GetAuraFrameworks()
     return frameworks
 end
 
+----------------------------------------------------------------------
+-- Sync Aura State (Buffs / Auras)
+----------------------------------------------------------------------
 function Injection.SyncAuraState(auraId, triggernum, targetSpells)
     local frameworks = GetAuraFrameworks()
     if #frameworks == 0 then return end
@@ -281,15 +475,65 @@ function Injection.SyncAuraState(auraId, triggernum, targetSpells)
     end
 end
 
+----------------------------------------------------------------------
+-- Sync Spell State (Spell Usable / Cooldown Progress)
+----------------------------------------------------------------------
+function Injection.SyncSpellState(auraId, triggernum, targetSpells, ignoreGCD)
+    local frameworks = GetAuraFrameworks()
+    if #frameworks == 0 then return end
+
+    local isUsable, notEnoughPower, onCooldown, start, dur, exp, charges, maxCharges, icon, matchedID, name = M33K.CooldownViewer.IsSpellUsable(targetSpells, ignoreGCD)
+
+    for _, WA in ipairs(frameworks) do
+        if WA and WA.GetTriggerStateForTrigger then
+            local allStates = WA.GetTriggerStateForTrigger(auraId, triggernum)
+            if allStates then
+                local now = GetTime and GetTime() or 0
+                local rem = (exp and exp > now) and (exp - now) or 0
+
+                allStates[""] = {
+                    show = isUsable,
+                    changed = true,
+                    usable = isUsable,
+                    notEnoughPower = notEnoughPower,
+                    onCooldown = onCooldown,
+                    progressType = "timed",
+                    duration = dur or 0,
+                    expirationTime = exp or 0,
+                    total = dur or 0,
+                    remaining = rem,
+                    icon = icon or 136243,
+                    charges = charges or 0,
+                    maxCharges = maxCharges or 0,
+                    stacks = charges or 0,
+                    value = charges or 0,
+                    spellId = matchedID,
+                    name = name or ("Spell " .. (matchedID or 0)),
+                }
+
+                if WA.UpdatedTriggerState then
+                    WA.UpdatedTriggerState(auraId)
+                end
+            end
+        end
+    end
+end
+
 function Injection.Initialize()
     local frameworks = GetAuraFrameworks()
     if #frameworks == 0 then return false end
 
-    -- Hook Buff trigger options in OptionsPrivate / Options globals
+    -- Hook OptionsPrivate globals
     local optPrivate = _G.OptionsPrivate
-    if optPrivate and optPrivate.GetBuffTriggerOptions and not optPrivate._cvWrapped then
-        optPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(optPrivate.GetBuffTriggerOptions)
-        optPrivate._cvWrapped = true
+    if optPrivate then
+        if optPrivate.GetBuffTriggerOptions and not optPrivate._cvBuffWrapped then
+            optPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(optPrivate.GetBuffTriggerOptions)
+            optPrivate._cvBuffWrapped = true
+        end
+        if optPrivate.GetSpellTriggerOptions and not optPrivate._cvSpellWrapped then
+            optPrivate.GetSpellTriggerOptions = Injection.WrapSpellTriggerOptions(optPrivate.GetSpellTriggerOptions)
+            optPrivate._cvSpellWrapped = true
+        end
     end
 
     -- Hook trigger system registration on every available framework
@@ -300,6 +544,8 @@ function Injection.Initialize()
                 for _, sysType in ipairs(systemTypes) do
                     if sysType == "aura2" then
                         optionsFunc = Injection.WrapBuffTriggerOptions(optionsFunc)
+                    elseif sysType == "spell" or sysType == "status" then
+                        optionsFunc = Injection.WrapSpellTriggerOptions(optionsFunc)
                     end
                 end
                 return orig_Register(systemTypes, optionsFunc)
@@ -307,9 +553,15 @@ function Injection.Initialize()
             WA._cvRegisterHooked = true
         end
 
-        if WA.OptionsPrivate and WA.OptionsPrivate.GetBuffTriggerOptions and not WA.OptionsPrivate._cvWrapped then
-            WA.OptionsPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(WA.OptionsPrivate.GetBuffTriggerOptions)
-            WA.OptionsPrivate._cvWrapped = true
+        if WA.OptionsPrivate then
+            if WA.OptionsPrivate.GetBuffTriggerOptions and not WA.OptionsPrivate._cvBuffWrapped then
+                WA.OptionsPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(WA.OptionsPrivate.GetBuffTriggerOptions)
+                WA.OptionsPrivate._cvBuffWrapped = true
+            end
+            if WA.OptionsPrivate.GetSpellTriggerOptions and not WA.OptionsPrivate._cvSpellWrapped then
+                WA.OptionsPrivate.GetSpellTriggerOptions = Injection.WrapSpellTriggerOptions(WA.OptionsPrivate.GetSpellTriggerOptions)
+                WA.OptionsPrivate._cvSpellWrapped = true
+            end
         end
     end
 

@@ -264,3 +264,73 @@ Harness.RunTest("8. Show Untracked Buffs checkbox alters dropdown values between
     _G.C_CooldownViewer._cooldowns[1001] = nil
     _G.C_CooldownViewer._cooldowns[1002] = nil
 end)
+
+Harness.RunTest("9. Injection wraps SpellTrigger options and injects Cooldown Manager picker", function()
+    local dummyData = {
+        id = "TestSpellTriggerAura",
+        triggers = {
+            [1] = {
+                trigger = {
+                    type = "spell",
+                    spellName = 31884,
+                    useCooldownViewer = true,
+                }
+            }
+        }
+    }
+
+    local options = OptionsPrivate.GetSpellTriggerOptions(dummyData, 1)
+    Harness.Assert(options ~= nil, "Options table should be returned")
+
+    local spell_options = options["trigger.1.spell_options"]
+    Harness.Assert(spell_options ~= nil, "spell_options should exist")
+    Harness.Assert(spell_options.cvHeader ~= nil, "cvHeader should be injected")
+    Harness.Assert(spell_options.useCooldownViewer ~= nil, "useCooldownViewer should be injected")
+    Harness.Assert(spell_options.cvShowAllCooldowns ~= nil, "cvShowAllCooldowns should be injected")
+    Harness.Assert(spell_options.cvPickerCooldowns ~= nil, "cvPickerCooldowns should be injected")
+    Harness.Assert(spell_options.cvPickerAdd ~= nil, "cvPickerAdd should be injected")
+end)
+
+Harness.RunTest("10. Spell trigger Add Selected Cooldown sets trigger.spellName and linkedSpells", function()
+    local data = {
+        id = "TestSpellSelectAura",
+        triggers = {
+            [1] = {
+                trigger = {
+                    type = "spell",
+                    useCooldownViewer = true,
+                }
+            }
+        }
+    }
+
+    local opts = OptionsPrivate.GetSpellTriggerOptions(data, 1)["trigger.1.spell_options"]
+    opts.cvPickerCooldowns.set({}, "31884")
+    opts.cvPickerAdd.func()
+
+    Harness.AssertEquals(data.triggers[1].trigger.spellName, 31884, "spellName should be set to 31884")
+    Harness.AssertEquals(data.triggers[1].trigger.spellId, 31884, "spellId should be set to 31884")
+    Harness.AssertEquals(data.triggers[1].trigger.cvLinkedSpells[1], 31884, "Linked spells should include 31884")
+end)
+
+Harness.RunTest("11. SyncSpellState pushes usable, charges, duration, and cooldown state to trigger state", function()
+    local auraId = "TestSpellAura"
+    local triggernum = 1
+
+    Harness.SetTime(1000.0)
+    _G.C_Spell._cooldowns[31884] = { startTime = 0, duration = 0, isEnabled = true }
+    _G.C_Spell._charges[31884] = { currentCharges = 2, maxCharges = 2 }
+
+    M33K.Injection.SyncSpellState(auraId, triggernum, { [31884] = true }, false)
+
+    local state = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)[""]
+    Harness.Assert(state ~= nil, "State should be populated")
+    Harness.AssertEquals(state.show, true, "Spell should be usable (show=true)")
+    Harness.AssertEquals(state.usable, true, "usable flag should be true")
+    Harness.AssertEquals(state.charges, 2, "charges should be 2")
+    Harness.AssertEquals(state.maxCharges, 2, "maxCharges should be 2")
+    Harness.AssertEquals(state.spellId, 31884, "spellId should match")
+
+    _G.C_Spell._cooldowns[31884] = nil
+    _G.C_Spell._charges[31884] = nil
+end)
