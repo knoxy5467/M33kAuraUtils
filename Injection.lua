@@ -102,21 +102,40 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 end,
             }
 
-            -- Dropdown: Tracked Buffs & Bars ONLY (strictly for aura/buff triggers)
+            -- Checkbox: Show Untracked / All Buffs
+            aura_options.cvShowAllBuffs = {
+                type = "toggle",
+                name = "Show Untracked Buffs",
+                desc = "When checked, includes all potential buffs from the Blizzard Cooldown Manager database, even if not currently tracked on your bars.",
+                order = 50.3,
+                width = dw,
+                hidden = function()
+                    return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
+                end,
+                get = function() return trigger.cvShowAllBuffs == true end,
+                set = function(info, v)
+                    trigger.cvShowAllBuffs = v
+                    if WA and WA.Add then WA.Add(data) end
+                    if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
+                end,
+            }
+
+            -- Dropdown: Tracked Buffs & Bars (strictly for aura/buff triggers)
             aura_options.cvPickerBuffsAndBars = {
                 type = "select",
                 name = "Select Tracked Buff / Bar",
-                desc = "Shows buffs and bars actively tracked in your Blizzard Cooldown Manager. Select one to add it to your aura tracking.",
-                order = 50.3,
+                desc = "Shows buffs and bars from your Blizzard Cooldown Manager. Select one to add it to your aura tracking.",
+                order = 50.4,
                 width = dw,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
                 end,
                 values = function()
                     if M33K.CooldownViewer and M33K.CooldownViewer.EnumerateTrackedBuffsAndBars then
-                        return BuildDropdownValues(M33K.CooldownViewer.EnumerateTrackedBuffsAndBars(), "-- Select Tracked Buff or Bar --")
+                        local includeAll = (trigger.cvShowAllBuffs == true)
+                        return BuildDropdownValues(M33K.CooldownViewer.EnumerateTrackedBuffsAndBars(includeAll), "-- Select Buff or Bar --")
                     end
-                    return { ["0"] = "-- No actively tracked buffs/bars found --" }
+                    return { ["0"] = "-- No buffs/bars found --" }
                 end,
                 get = function() return trigger._cvPickBuffOrBar or "0" end,
                 set = function(info, v) trigger._cvPickBuffOrBar = v end,
@@ -127,7 +146,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 type = "execute",
                 name = "Add Selected Buff",
                 desc = "Adds the chosen buff to the Linked Spell IDs list.",
-                order = 50.4,
+                order = 50.5,
                 width = dw,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)
@@ -179,7 +198,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
                 type = "execute",
                 name = "|cFF00B4FFRefresh Tracked Buffs|r",
                 desc = "Re-scans the Blizzard Cooldown Manager for currently tracked buffs and bars.",
-                order = 50.5,
+                order = 50.6,
                 width = dw,
                 hidden = function()
                     return not (trigger.type == "aura2" and trigger.unit == "player" and trigger.useCooldownViewer)

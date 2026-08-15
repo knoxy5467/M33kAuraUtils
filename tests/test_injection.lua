@@ -30,6 +30,7 @@ Harness.RunTest("1. Injection wraps BuffTrigger options generator and injects ON
     Harness.Assert(aura_options.cvHeader ~= nil, "cvHeader should be injected")
     Harness.Assert(aura_options.useCooldownViewer ~= nil, "useCooldownViewer toggle should be injected")
     Harness.Assert(aura_options.cvLinkedSpells ~= nil, "cvLinkedSpells input should be injected")
+    Harness.Assert(aura_options.cvShowAllBuffs ~= nil, "cvShowAllBuffs checkbox should be injected")
     Harness.Assert(aura_options.cvPickerBuffsAndBars ~= nil, "cvPickerBuffsAndBars dropdown should be injected")
     Harness.Assert(aura_options.cvPickerCooldowns == nil, "cvPickerCooldowns should NOT be present on Buff triggers")
     Harness.Assert(aura_options.cvPickerAdd ~= nil, "cvPickerAdd button should be injected")
@@ -53,6 +54,8 @@ Harness.RunTest("2. Injected controls hidden property respects unit == player", 
 
     Harness.AssertEquals(playerOpts.useCooldownViewer.hidden(), false, "Player unit should NOT hide toggle")
     Harness.AssertEquals(targetOpts.useCooldownViewer.hidden(), true, "Target unit SHOULD hide toggle")
+    Harness.AssertEquals(playerOpts.cvShowAllBuffs.hidden(), false, "Player unit should NOT hide show all buffs checkbox")
+    Harness.AssertEquals(targetOpts.cvShowAllBuffs.hidden(), true, "Target unit SHOULD hide show all buffs checkbox")
     Harness.AssertEquals(playerOpts.cvPickerBuffsAndBars.hidden(), false, "Player unit should NOT hide Buffs/Bars picker")
     Harness.AssertEquals(targetOpts.cvPickerBuffsAndBars.hidden(), true, "Target unit SHOULD hide Buffs/Bars picker")
 end)
@@ -209,4 +212,55 @@ Harness.RunTest("7. SyncAuraState pushes state into M33kAuras environment when T
 
     _G.BuffIconCooldownViewer.itemFramePool._icons = {}
     _G.ThisWeeksAuras = savedTWA
+end)
+
+Harness.RunTest("8. Show Untracked Buffs checkbox alters dropdown values between active-only and all-buffs", function()
+    -- Category 3 (TrackedBuff) has 1 tracked spell and 1 untracked spell (via includeAll)
+    _G.C_CooldownViewer._categorySets[3] = { 1001 } -- tracked set
+    _G.C_CooldownViewer._cooldowns[1001] = { spellID = 1001, name = "ActiveBuff" }
+    _G.C_CooldownViewer._cooldowns[1002] = { spellID = 1002, name = "UntrackedBuff" }
+
+    -- Mock GetCooldownViewerCategorySet to return {1001} for false, and {1001, 1002} for true
+    local orig_GetCat = _G.C_CooldownViewer.GetCooldownViewerCategorySet
+    _G.C_CooldownViewer.GetCooldownViewerCategorySet = function(cat, includeAll)
+        if cat == 3 then
+            return includeAll and { 1001, 1002 } or { 1001 }
+        end
+        return {}
+    end
+
+    local data = {
+        id = "TestToggleAura",
+        triggers = {
+            [1] = {
+                trigger = {
+                    type = "aura2",
+                    unit = "player",
+                    useCooldownViewer = true,
+                    cvShowAllBuffs = false,
+                }
+            }
+        }
+    }
+
+    local opts = OptionsPrivate.GetBuffTriggerOptions(data, 1)["trigger.1.aura_options"]
+
+    -- With cvShowAllBuffs = false (default)
+    local valsTrackedOnly = opts.cvPickerBuffsAndBars.values()
+    Harness.Assert(valsTrackedOnly["1001"] ~= nil, "Active buff 1001 should be present")
+    Harness.Assert(valsTrackedOnly["1002"] == nil, "Untracked buff 1002 should NOT be present when checkbox is off")
+
+    -- Toggle cvShowAllBuffs to true
+    opts.cvShowAllBuffs.set({}, true)
+    Harness.AssertEquals(data.triggers[1].trigger.cvShowAllBuffs, true, "cvShowAllBuffs should be true")
+
+    local valsAll = opts.cvPickerBuffsAndBars.values()
+    Harness.Assert(valsAll["1001"] ~= nil, "Active buff 1001 should be present")
+    Harness.Assert(valsAll["1002"] ~= nil, "Untracked buff 1002 SHOULD be present when checkbox is on")
+
+    -- Clean up & restore
+    _G.C_CooldownViewer.GetCooldownViewerCategorySet = orig_GetCat
+    _G.C_CooldownViewer._categorySets[3] = {}
+    _G.C_CooldownViewer._cooldowns[1001] = nil
+    _G.C_CooldownViewer._cooldowns[1002] = nil
 end)
