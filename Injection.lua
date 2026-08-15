@@ -116,6 +116,13 @@ function Injection.WrapBuffTriggerOptions(origFunc)
             get = function() return trigger.useCooldownViewer end,
             set = function(info, v)
                 trigger.useCooldownViewer = v
+                -- Auto-register/unregister into the event-driven sync path
+                if v then
+                    local targets = Injection.BuildTargetSpellList(trigger)
+                    Injection.RegisterHookedAura(data.id, triggernum, targets)
+                else
+                    Injection.UnregisterHookedAura(data.id)
+                end
                 if WA and WA.Add then WA.Add(data) end
                 if WA and WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
             end,
@@ -230,6 +237,11 @@ function Injection.WrapBuffTriggerOptions(origFunc)
 
                     trigger._cvPickBuffOrBar = "0"
 
+                    -- Keep the hooked aura registry up-to-date with the new spell list
+                    if trigger.useCooldownViewer then
+                        local targets = Injection.BuildTargetSpellList(trigger)
+                        Injection.RegisterHookedAura(data.id, triggernum, targets)
+                    end
                     if WA then
                         if WA.Add then WA.Add(data) end
                         if WA.ClearAndUpdateOptions then WA.ClearAndUpdateOptions(data.id) end
@@ -471,6 +483,23 @@ local function GetAuraFrameworks()
 end
 
 ----------------------------------------------------------------------
+-- Clear all trigger-owned fields from a state table, leaving any
+-- WA-managed display/positioning keys untouched.
+----------------------------------------------------------------------
+local TRIGGER_FIELDS = {
+    "show", "changed", "progressType",
+    "duration", "expirationTime", "total", "remaining",
+    "icon", "stacks", "applications", "charges", "maxCharges",
+    "value", "spellId", "name",
+    "usable", "notEnoughPower", "onCooldown",
+}
+local function ClearTriggerFields(s)
+    for _, k in ipairs(TRIGGER_FIELDS) do
+        s[k] = nil
+    end
+end
+
+----------------------------------------------------------------------
 -- Sync Aura State (Buffs / Auras)
 ----------------------------------------------------------------------
 function Injection.SyncAuraState(auraId, triggernum, targetSpells)
@@ -507,6 +536,9 @@ function Injection.SyncAuraState(auraId, triggernum, targetSpells)
                     s.spellId = matchedID
                     s.name = name or ("Spell " .. (matchedID or 0))
                 else
+                    -- Clear all stale trigger fields so WA doesn't keep the timer alive.
+                    -- WA-managed positioning keys on the table are left intact.
+                    ClearTriggerFields(s)
                     s.show = false
                     s.changed = true
                 end
@@ -540,23 +572,31 @@ function Injection.SyncSpellState(auraId, triggernum, targetSpells, ignoreGCD)
                 local now = GetTime and GetTime() or 0
                 local rem = (exp and exp > now) and (exp - now) or 0
 
-                s.show = isUsable
-                s.changed = true
-                s.usable = isUsable
-                s.notEnoughPower = notEnoughPower
-                s.onCooldown = onCooldown
-                s.progressType = "timed"
-                s.duration = dur or 0
-                s.expirationTime = exp or 0
-                s.total = dur or 0
-                s.remaining = rem
-                s.icon = icon or 136243
-                s.charges = charges or 0
-                s.maxCharges = maxCharges or 0
-                s.stacks = charges or 0
-                s.value = charges or 0
-                s.spellId = matchedID
-                s.name = name or ("Spell " .. (matchedID or 0))
+                if not isUsable then
+                    -- Clear all stale trigger fields so WA untriggers cleanly.
+                    -- WA-managed positioning keys on the table are left intact.
+                    ClearTriggerFields(s)
+                    s.show = false
+                    s.changed = true
+                else
+                    s.show = true
+                    s.changed = true
+                    s.usable = true
+                    s.notEnoughPower = notEnoughPower
+                    s.onCooldown = onCooldown
+                    s.progressType = "timed"
+                    s.duration = dur or 0
+                    s.expirationTime = exp or 0
+                    s.total = dur or 0
+                    s.remaining = rem
+                    s.icon = icon or 136243
+                    s.charges = charges or 0
+                    s.maxCharges = maxCharges or 0
+                    s.stacks = charges or 0
+                    s.value = charges or 0
+                    s.spellId = matchedID
+                    s.name = name or ("Spell " .. (matchedID or 0))
+                end
 
                 if WA.UpdatedTriggerState then
                     WA.UpdatedTriggerState(auraId)
@@ -610,6 +650,29 @@ function Injection.Initialize()
             WA._cvRegisterHooked = true
         end
 
+        -- Hook WA.Add to auto-register CDM-enabled triggers whenever WA loads an aura.
+        -- This ensures auras configured with CDM tracking are wired into the event-driven
+        -- sync path on login, reload, and every time the aura is saved/updated.
+        if WA.Add and not WA._cvAddHooked then
+            local orig_Add = WA.Add
+            WA.Add = function(data, ...)
+                local result = orig_Add(data, ...)
+                if data and data.id and data.triggers then
+                    for tn, triggerEntry in pairs(data.triggers) do
+                        local trigger = triggerEntry and triggerEntry.trigger
+                        if trigger
+                           and trigger.useCooldownViewer
+                           and (trigger.type == "aura2" or trigger.type == "aura") then
+                            local targets = Injection.BuildTargetSpellList(trigger)
+                            Injection.RegisterHookedAura(data.id, tn, targets)
+                        end
+                    end
+                end
+                return result
+            end
+            WA._cvAddHooked = true
+        end
+
         if WA.OptionsPrivate then
             if WA.OptionsPrivate.GetBuffTriggerOptions and not WA.OptionsPrivate._cvBuffWrapped then
                 WA.OptionsPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(WA.OptionsPrivate.GetBuffTriggerOptions)
@@ -634,4 +697,14 @@ end
 
 function Injection.UnregisterHookedAura(auraId)
     hookedAuras[auraId] = nil
+end
+
+----------------------------------------------------------------------
+-- SyncAllHookedAuras: called by Core.lua on UNIT_AURA / SPELL_UPDATE_*
+-- events so CDM buff state flows through the regular WA evaluation path.
+----------------------------------------------------------------------
+function Injection.SyncAllHookedAuras()
+    for auraId, info in pairs(hookedAuras) do
+        Injection.SyncAuraState(auraId, info.triggernum, info.targetSpells)
+    end
 end

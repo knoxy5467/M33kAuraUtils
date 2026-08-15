@@ -34,6 +34,15 @@ local function OnEvent(self, event, arg1, ...)
         if M33K.IntegTest and M33K.IntegTest.InitializeSlashHooks then
             M33K.IntegTest.InitializeSlashHooks()
         end
+    elseif event == "UNIT_AURA"
+        or event == "SPELL_UPDATE_COOLDOWN"
+        or event == "SPELL_UPDATE_CHARGES"
+        or event == "SPELL_UPDATE_USABLE" then
+        -- Drive CDM buff/spell state into WA on the same events WA itself uses,
+        -- so our injected trigger behaves identically to the native trigger path.
+        if M33K.Injection and M33K.Injection.SyncAllHookedAuras then
+            M33K.Injection.SyncAllHookedAuras()
+        end
     end
 end
 
@@ -43,5 +52,6 @@ if EventFrame then
     EventFrame:RegisterEvent("UNIT_AURA")
     EventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
     EventFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
+    EventFrame:RegisterEvent("SPELL_UPDATE_USABLE")
     EventFrame:SetScript("OnEvent", OnEvent)
 end

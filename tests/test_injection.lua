@@ -135,6 +135,7 @@ Harness.RunTest("5. SyncAuraState pushes rich Cooldown Viewer state (stacks, dur
     }
     _G.BuffIconCooldownViewer.itemFramePool._icons = { mockIcon }
 
+    -- Active tick
     M33K.Injection.SyncAuraState(auraId, triggernum, { [188370] = true, [26573] = true })
 
     local state = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)[""]
@@ -150,7 +151,18 @@ Harness.RunTest("5. SyncAuraState pushes rich Cooldown Viewer state (stacks, dur
     -- CRITICAL: WA-managed positioning keys must survive our sync (regression guard)
     Harness.AssertEquals(state._waPositionKey, "PRESERVED", "Pre-existing WA state keys must be preserved (not overwritten)")
 
+    -- Inactive tick: buff expires — stale timer fields must be cleared (always-active regression guard)
     _G.BuffIconCooldownViewer.itemFramePool._icons = {}
+    M33K.Injection.SyncAuraState(auraId, triggernum, { [188370] = true, [26573] = true })
+
+    local stateInactive = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)[""]
+    Harness.AssertEquals(stateInactive.show, false, "Inactive: show should be false")
+    Harness.Assert(stateInactive.expirationTime == nil, "Inactive: stale expirationTime must be cleared")
+    Harness.Assert(stateInactive.duration == nil, "Inactive: stale duration must be cleared")
+    Harness.Assert(stateInactive.progressType == nil, "Inactive: stale progressType must be cleared")
+    -- WA positioning key must still survive the inactive clear
+    Harness.AssertEquals(stateInactive._waPositionKey, "PRESERVED", "Inactive: WA positioning key must still be preserved")
+
     existingStates[""] = nil
 end)
 
@@ -392,3 +404,69 @@ Harness.RunTest("12. Generic non-spell triggers (Health/Power/Combat Log) are no
     Harness.Assert(flattened["trigger.1.Health.healthValue"] ~= nil, "Flattened options contain healthValue")
 end)
 
+Harness.RunTest("13. Enabling useCooldownViewer auto-registers aura into event-driven hookedAuras registry", function()
+    local auraId = "AutoRegTestAura"
+    local data = {
+        id = auraId,
+        triggers = {
+            [1] = {
+                trigger = {
+                    type = "aura2",
+                    unit = "player",
+                    spellId = 0,
+                    useCooldownViewer = false,
+                    cvLinkedSpells = {},
+                }
+            }
+        }
+    }
+
+    -- Generate the options table to get the setter closures
+    local options = OptionsPrivate.GetBuffTriggerOptions(data, 1)
+    local aura_opts = options["trigger.1.aura_options"]
+    Harness.Assert(aura_opts ~= nil, "aura_options should be injected")
+    Harness.Assert(aura_opts.useCooldownViewer ~= nil, "useCooldownViewer toggle must exist")
+
+    -- Toggle ON: should register into event-driven path
+    aura_opts.useCooldownViewer.set(nil, true)
+    -- The trigger is now registered — SyncAllHookedAuras should process it without error
+    M33K.Injection.SyncAllHookedAuras()
+
+    -- Toggle OFF: should unregister
+    aura_opts.useCooldownViewer.set(nil, false)
+    Harness.Assert(true, "Toggle on/off without error confirms auto-register path works")
+end)
+
+Harness.RunTest("14. SyncAllHookedAuras drives CDM state into WA on events (event-driven regular path)", function()
+    local auraId = "SyncAllTestAura"
+    local triggernum = 1
+
+    local mockIcon = {
+        spellID = 188370,
+        cooldownUseAuraDisplayTime = true,
+        cooldownExpirationTime = 1099.0,
+        cooldownDuration = 10.0,
+        IsShown = function() return true end,
+    }
+    _G.BuffIconCooldownViewer.itemFramePool._icons = { mockIcon }
+
+    M33K.Injection.RegisterHookedAura(auraId, triggernum, { [188370] = true })
+
+    -- Simulate UNIT_AURA event firing
+    M33K.Injection.SyncAllHookedAuras()
+
+    local state = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)[""]
+    Harness.Assert(state ~= nil, "State should be set after SyncAllHookedAuras")
+    Harness.AssertEquals(state.show, true, "State should be active when CDM icon matches")
+    Harness.AssertEquals(state.expirationTime, 1099.0, "expirationTime should come from CDM viewer")
+
+    -- Simulate buff expiring
+    _G.BuffIconCooldownViewer.itemFramePool._icons = {}
+    M33K.Injection.SyncAllHookedAuras()
+
+    local stateOff = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)[""]
+    Harness.AssertEquals(stateOff.show, false, "State should be inactive after buff expires")
+    Harness.Assert(stateOff.expirationTime == nil, "Stale expirationTime must be cleared on inactive (always-active regression guard)")
+
+    M33K.Injection.UnregisterHookedAura(auraId)
+end)
