@@ -21,3 +21,9 @@ Read ORIGINAL_REQUEST.md and thoroughly explore the M33kAuraUtils codebase to in
 
 Write your findings to `analysis.md` and a summary handoff to `handoff.md` in your working directory.
 When finished, send a message back to parent with a concise summary and path to your handoff.
+
+## 2026-08-15T01:14:11Z
+
+**Context**: User Directive Update (appended to ORIGINAL_REQUEST.md)
+**Content**: CRITICAL INVARIANT: Completely rip out and remove all references to C_UnitAuras / C_UnitAura across the entire codebase. Our utils must ONLY grab buff and cooldown information directly from Blizzard Cooldown Manager (CDM) data (C_CooldownViewer, CooldownViewerSettings, and live viewer frames BuffIconCooldownViewer, BuffBarCooldownViewer, EssentialCooldownViewer, UtilityCooldownViewer). Do not use C_UnitAuras for buff checking, fallback, or icon resolution.
+**Action**: Incorporate this invariant into your test & build harness analysis. All mock frameworks, unit tests, and /wa integ steps must verify that C_UnitAuras is never invoked, and that all test assertions run purely against CDM mocks and live frames.

@@ -483,31 +483,32 @@ function Injection.SyncAuraState(auraId, triggernum, targetSpells)
         if WA and WA.GetTriggerStateForTrigger then
             local allStates = WA.GetTriggerStateForTrigger(auraId, triggernum)
             if allStates then
+                -- Merge into existing state to preserve WA-managed display settings
+                -- (position, anchor, size, etc.) that WA writes onto this table.
+                local s = allStates[""] or {}
+                allStates[""] = s
+
                 if active then
                     local now = GetTime and GetTime() or 0
                     local rem = (exp and exp > 0) and math.max(0, exp - now) or 0
 
-                    allStates[""] = {
-                        show = true,
-                        changed = true,
-                        progressType = "timed",
-                        duration = dur or 0,
-                        expirationTime = exp or 0,
-                        total = dur or 0,
-                        remaining = rem,
-                        icon = icon or 136243,
-                        stacks = stacks or 0,
-                        applications = stacks or 0,
-                        charges = stacks or 0,
-                        value = stacks or 0,
-                        spellId = matchedID,
-                        name = name or ("Spell " .. (matchedID or 0)),
-                    }
+                    s.show = true
+                    s.changed = true
+                    s.progressType = "timed"
+                    s.duration = dur or 0
+                    s.expirationTime = exp or 0
+                    s.total = dur or 0
+                    s.remaining = rem
+                    s.icon = icon or 136243
+                    s.stacks = stacks or 0
+                    s.applications = stacks or 0
+                    s.charges = stacks or 0
+                    s.value = stacks or 0
+                    s.spellId = matchedID
+                    s.name = name or ("Spell " .. (matchedID or 0))
                 else
-                    allStates[""] = {
-                        show = false,
-                        changed = true,
-                    }
+                    s.show = false
+                    s.changed = true
                 end
 
                 if WA.UpdatedTriggerState then
@@ -531,28 +532,31 @@ function Injection.SyncSpellState(auraId, triggernum, targetSpells, ignoreGCD)
         if WA and WA.GetTriggerStateForTrigger then
             local allStates = WA.GetTriggerStateForTrigger(auraId, triggernum)
             if allStates then
+                -- Merge into existing state to preserve WA-managed display settings
+                -- (position, anchor, size, etc.) that WA writes onto this table.
+                local s = allStates[""] or {}
+                allStates[""] = s
+
                 local now = GetTime and GetTime() or 0
                 local rem = (exp and exp > now) and (exp - now) or 0
 
-                allStates[""] = {
-                    show = isUsable,
-                    changed = true,
-                    usable = isUsable,
-                    notEnoughPower = notEnoughPower,
-                    onCooldown = onCooldown,
-                    progressType = "timed",
-                    duration = dur or 0,
-                    expirationTime = exp or 0,
-                    total = dur or 0,
-                    remaining = rem,
-                    icon = icon or 136243,
-                    charges = charges or 0,
-                    maxCharges = maxCharges or 0,
-                    stacks = charges or 0,
-                    value = charges or 0,
-                    spellId = matchedID,
-                    name = name or ("Spell " .. (matchedID or 0)),
-                }
+                s.show = isUsable
+                s.changed = true
+                s.usable = isUsable
+                s.notEnoughPower = notEnoughPower
+                s.onCooldown = onCooldown
+                s.progressType = "timed"
+                s.duration = dur or 0
+                s.expirationTime = exp or 0
+                s.total = dur or 0
+                s.remaining = rem
+                s.icon = icon or 136243
+                s.charges = charges or 0
+                s.maxCharges = maxCharges or 0
+                s.stacks = charges or 0
+                s.value = charges or 0
+                s.spellId = matchedID
+                s.name = name or ("Spell " .. (matchedID or 0))
 
                 if WA.UpdatedTriggerState then
                     WA.UpdatedTriggerState(auraId)

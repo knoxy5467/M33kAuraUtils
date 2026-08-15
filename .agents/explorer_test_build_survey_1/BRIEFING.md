@@ -25,9 +25,13 @@ Survey the build/test execution pipeline, mock Blizzard/WeakAuras environment, u
 - **Interface contracts**: `ORIGINAL_REQUEST.md`
 
 ## Key Decisions Made
-- Will inspect all build and test scripts, test harness stubs, engine/injection logic, and in-client integ suite.
-- Will run the test runner to observe current baseline test execution.
+- Discovered and documented the complete 4-step pipeline in `scripts/run_tests.lua` (TOC validation, Syntax check, Unit test execution, Distribution deployment).
+- Identified root cause of 2 failing tests in `test_engine.lua` (Tests 2 & 7): legacy reliance on `C_UnitAuras`, violating the strict user directive to rely ONLY on native Blizzard CDM sources.
+- Specified complete mock requirements for `test_harness.lua` across direct spells, override spells, CDM live viewer icon/bar frames, CooldownViewerSettings DataProvider, and robust fallback logic without `C_UnitAuras`.
+- Formulated exact test assertions for R1 (Icon Resolution), R2 (Trigger State Icon Binding), and R3 (In-client `/wa integ` Step 7).
 
 ## Artifact Index
 - `.agents/explorer_test_build_survey_1/analysis.md` — Detailed test and build survey findings.
 - `.agents/explorer_test_build_survey_1/handoff.md` — 5-component handoff report.
+- `.agents/explorer_test_build_survey_1/DISPATCH.md` — Incoming dispatch log.
+- `.agents/explorer_test_build_survey_1/progress.md` — Liveness progress heartbeat.

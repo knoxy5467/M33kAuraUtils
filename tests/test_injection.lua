@@ -121,6 +121,10 @@ Harness.RunTest("5. SyncAuraState pushes rich Cooldown Viewer state (stacks, dur
     local auraId = "TestAura1"
     local triggernum = 1
 
+    -- Pre-populate a WA-managed positioning key to simulate display settings WA writes
+    local existingStates = ThisWeeksAuras.GetTriggerStateForTrigger(auraId, triggernum)
+    existingStates[""] = { _waPositionKey = "PRESERVED" }
+
     local mockIcon = {
         spellID = 26573,
         cooldownUseAuraDisplayTime = true,
@@ -143,8 +147,11 @@ Harness.RunTest("5. SyncAuraState pushes rich Cooldown Viewer state (stacks, dur
     Harness.AssertEquals(state.applications, 5, "State applications should be 5")
     Harness.AssertEquals(state.charges, 5, "State charges should be 5")
     Harness.AssertEquals(state.spellId, 26573, "State spellId should be 26573")
+    -- CRITICAL: WA-managed positioning keys must survive our sync (regression guard)
+    Harness.AssertEquals(state._waPositionKey, "PRESERVED", "Pre-existing WA state keys must be preserved (not overwritten)")
 
     _G.BuffIconCooldownViewer.itemFramePool._icons = {}
+    existingStates[""] = nil
 end)
 
 Harness.RunTest("6. Injection hooks M33kAuras.RegisterTriggerSystemOptions directly with only tracked buffs", function()
