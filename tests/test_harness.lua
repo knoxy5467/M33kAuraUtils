@@ -50,24 +50,6 @@ function Harness.SetupEnvironment()
         end,
     }
 
-    -- Mock C_UnitAuras
-    _G.C_UnitAuras = {
-        _auras = {},
-        _buffList = {},
-        GetUnitAuraBySpellID = function(unit, spellId)
-            if unit == "player" and _G.C_UnitAuras._auras[spellId] then
-                return _G.C_UnitAuras._auras[spellId]
-            end
-            return nil
-        end,
-        GetBuffDataByIndex = function(unit, index)
-            if unit == "player" then
-                return _G.C_UnitAuras._buffList[index]
-            end
-            return nil
-        end,
-    }
-
     -- Mock Enum.CooldownViewerCategory
     _G.Enum = _G.Enum or {}
     _G.Enum.CooldownViewerCategory = {

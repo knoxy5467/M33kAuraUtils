@@ -168,29 +168,13 @@ end
 
 ----------------------------------------------------------------------
 -- Core: IsBuffActive (trigger/untrigger logic)
+-- Exclusively queries Blizzard Cooldown Manager (BuffIconCooldownViewer, BuffBarCooldownViewer, etc.)
 -- Returns: active, expirationTime, duration, iconTexture, stacks, matchedSpellID, spellName
 ----------------------------------------------------------------------
 function CDViewer.IsBuffActive(targetSpells)
     local TARGET_SPELLS = NormalizeTargetSpells(targetSpells)
 
-    -- A. Direct check for unit aura via C_UnitAuras
-    if C_UnitAuras and type(C_UnitAuras.GetUnitAuraBySpellID) == "function" then
-        for spellID in pairs(TARGET_SPELLS) do
-            if type(spellID) == "number" then
-                local aura = C_UnitAuras.GetUnitAuraBySpellID("player", spellID)
-                if aura then
-                    local dur = aura.duration or 0
-                    local exp = aura.expirationTime or 0
-                    local ic = aura.icon
-                    local stacks = aura.applications or aura.charges or 0
-                    local name = aura.name or (M33K.Spells and M33K.Spells.GetSpellInfo(spellID) and M33K.Spells.GetSpellInfo(spellID).name) or "Buff"
-                    return true, exp, dur, ic, stacks, spellID, name
-                end
-            end
-        end
-    end
-
-    -- B. Blizzard Cooldown Viewer check
+    -- Blizzard Cooldown Viewer check ONLY (Strictly CDM data)
     for _, viewerName in ipairs(VIEWERS) do
         local viewer = _G[viewerName]
         if viewer and viewer.itemFramePool and type(viewer.itemFramePool.EnumerateActive) == "function" then

@@ -7,31 +7,31 @@ M33K.Engine.Initialize()
 
 Harness.BeginSuite("Blizzard Cooldown Viewer & Aura Engine Tests")
 
-Harness.RunTest("1. IsBuffActive returns false when neither C_UnitAuras nor Cooldown Viewer matches", function()
+Harness.RunTest("1. IsBuffActive returns false when no active icon in Cooldown Viewer matches", function()
     local TARGET_SPELLS = { [188370] = true, [26573] = true }
     local active, exp, dur = M33K.CooldownViewer.IsBuffActive(TARGET_SPELLS)
     Harness.AssertEquals(active, false, "Should not be active with empty environment")
 end)
 
-Harness.RunTest("2. Direct C_UnitAuras match returns true with stacks, duration, name, and ID", function()
-    _G.C_UnitAuras._auras[188370] = {
-        name = "Consecration",
-        duration = 12.0,
-        expirationTime = 1012.0,
-        icon = 135926,
-        applications = 3,
+Harness.RunTest("2. Cooldown Viewer live icon match returns true with stacks, duration, name, and ID", function()
+    local mockIcon = {
+        spellID = 188370,
+        cooldownUseAuraDisplayTime = true,
+        cooldownExpirationTime = 1012.0,
+        cooldownDuration = 12.0,
+        Applications = { Applications = 3 },
+        IsShown = function() return true end,
     }
+    _G.BuffIconCooldownViewer.itemFramePool._icons = { mockIcon }
 
     local active, exp, dur, icon, stacks, matchedID, name = M33K.CooldownViewer.IsBuffActive({ [188370] = true, [26573] = true })
-    Harness.AssertEquals(active, true, "Should return true from C_UnitAuras")
-    Harness.AssertEquals(dur, 12.0, "Duration should match C_UnitAuras duration")
+    Harness.AssertEquals(active, true, "Should return true from CDM viewer icon")
+    Harness.AssertEquals(dur, 12.0, "Duration should match CDM icon duration")
     Harness.AssertEquals(exp, 1012.0, "Expiration time should match")
-    Harness.AssertEquals(icon, 135926, "Icon should match")
     Harness.AssertEquals(stacks, 3, "Stacks should be 3")
     Harness.AssertEquals(matchedID, 188370, "Matched ID should be 188370")
-    Harness.AssertEquals(name, "Consecration", "Name should be Consecration")
 
-    _G.C_UnitAuras._auras[188370] = nil
+    _G.BuffIconCooldownViewer.itemFramePool._icons = {}
 end)
 
 Harness.RunTest("3. Cooldown Viewer matches active icon with cooldownUseAuraDisplayTime == true and extracts stacks", function()
@@ -113,14 +113,21 @@ Harness.RunTest("6. Cooldown Viewer matches overrideSpellID via C_CooldownViewer
 end)
 
 Harness.RunTest("7. Multiple target spell inputs supported (number, string, table)", function()
-    _G.C_UnitAuras._auras[777] = { duration = 5.0, expirationTime = 1005.0 }
+    local mockIcon = {
+        spellID = 777,
+        cooldownUseAuraDisplayTime = true,
+        cooldownDuration = 5.0,
+        cooldownExpirationTime = 1005.0,
+        IsShown = function() return true end,
+    }
+    _G.BuffIconCooldownViewer.itemFramePool._icons = { mockIcon }
 
     Harness.AssertEquals(M33K.CooldownViewer.IsBuffActive(777), true, "Direct number input")
     Harness.AssertEquals(M33K.CooldownViewer.IsBuffActive("777"), true, "String number input")
     Harness.AssertEquals(M33K.CooldownViewer.IsBuffActive({ 777, 888 }), true, "Array table input")
     Harness.AssertEquals(M33K.CooldownViewer.IsBuffActive({ [777] = true }), true, "Set table input")
 
-    _G.C_UnitAuras._auras[777] = nil
+    _G.BuffIconCooldownViewer.itemFramePool._icons = {}
 end)
 
 Harness.RunTest("8. EnumerateFromCDM queries CDM TrackedBuff and TrackedBar categories", function()

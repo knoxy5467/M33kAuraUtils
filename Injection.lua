@@ -107,7 +107,7 @@ function Injection.WrapBuffTriggerOptions(origFunc)
         subTable.useCooldownViewer = {
             type = "toggle",
             name = "Enable Cooldown Viewer Tracking",
-            desc = "Tracks active buff timers through Blizzard Cooldown Manager (BuffIconCooldownViewer, BuffBarCooldownViewer) and C_UnitAuras.",
+            desc = "Tracks active buff timers exclusively through the Blizzard Cooldown Manager (BuffIconCooldownViewer, BuffBarCooldownViewer).",
             order = 50.1,
             width = dw,
             hidden = function()
