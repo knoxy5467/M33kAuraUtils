@@ -210,31 +210,40 @@ function Harness.SetupEnvironment()
 
     _G.UIParent = _G.CreateFrame("Frame", "UIParent")
 
-    -- Mock ThisWeeksAuras
-    _G.ThisWeeksAuras = {
-        _auras = {},
-        _states = {},
-        _registeredOptions = {},
-        doubleWidth = 2,
-        normalWidth = 1,
-        Add = function(data)
-            _G.ThisWeeksAuras._auras[data.id] = data
-        end,
-        GetTriggerStateForTrigger = function(auraId, triggernum)
-            _G.ThisWeeksAuras._states[auraId] = _G.ThisWeeksAuras._states[auraId] or {}
-            _G.ThisWeeksAuras._states[auraId][triggernum] = _G.ThisWeeksAuras._states[auraId][triggernum] or {}
-            return _G.ThisWeeksAuras._states[auraId][triggernum]
-        end,
-        UpdatedTriggerState = function(auraId)
-            _G.ThisWeeksAuras._lastUpdatedAura = auraId
-        end,
-        ClearAndUpdateOptions = function(auraId)
-            _G.ThisWeeksAuras._optionsCleared = auraId
-        end,
-        RegisterTriggerSystemOptions = function(systemTypes, func)
-            table.insert(_G.ThisWeeksAuras._registeredOptions, { types = systemTypes, fn = func })
-        end,
-    }
+    -- Helper to create mock Aura Framework (M33kAuras / ThisWeeksAuras / WeakAuras)
+    local function CreateMockAuraFramework(name)
+        local fw
+        fw = {
+            _name = name,
+            _auras = {},
+            _states = {},
+            _registeredOptions = {},
+            doubleWidth = 2,
+            normalWidth = 1,
+            Add = function(data)
+                fw._auras[data.id] = data
+            end,
+            GetTriggerStateForTrigger = function(auraId, triggernum)
+                fw._states[auraId] = fw._states[auraId] or {}
+                fw._states[auraId][triggernum] = fw._states[auraId][triggernum] or {}
+                return fw._states[auraId][triggernum]
+            end,
+            UpdatedTriggerState = function(auraId)
+                fw._lastUpdatedAura = auraId
+            end,
+            ClearAndUpdateOptions = function(auraId)
+                fw._optionsCleared = auraId
+            end,
+            RegisterTriggerSystemOptions = function(systemTypes, func)
+                table.insert(fw._registeredOptions, { types = systemTypes, fn = func })
+            end,
+        }
+        return fw
+    end
+
+    _G.ThisWeeksAuras = CreateMockAuraFramework("ThisWeeksAuras")
+    _G.M33kAuras = CreateMockAuraFramework("M33kAuras")
+    _G.WeakAuras = CreateMockAuraFramework("WeakAuras")
 
     _G.OptionsPrivate = {
         GetBuffTriggerOptions = function(data, triggernum)

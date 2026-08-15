@@ -244,69 +244,93 @@ function Injection.BuildTargetSpellList(trigger)
     return targets
 end
 
-function Injection.SyncAuraState(auraId, triggernum, targetSpells)
-    local WA = GetAuraFramework()
-    if not WA or not WA.GetTriggerStateForTrigger then return end
+local function GetAuraFrameworks()
+    local frameworks = {}
+    if _G.ThisWeeksAuras then table.insert(frameworks, _G.ThisWeeksAuras) end
+    if _G.M33kAuras then table.insert(frameworks, _G.M33kAuras) end
+    if _G.WeakAuras then table.insert(frameworks, _G.WeakAuras) end
+    return frameworks
+end
 
-    local allStates = WA.GetTriggerStateForTrigger(auraId, triggernum)
-    if not allStates then return end
+local function GetPrimaryAuraFramework()
+    return _G.ThisWeeksAuras or _G.M33kAuras or _G.WeakAuras
+end
+
+function Injection.SyncAuraState(auraId, triggernum, targetSpells)
+    local frameworks = GetAuraFrameworks()
+    if #frameworks == 0 then return end
 
     local active, exp, dur, icon, stacks, matchedID, name = M33K.CooldownViewer.IsBuffActive(targetSpells)
 
-    if active then
-        local now = GetTime and GetTime() or 0
-        local rem = (exp and exp > 0) and math.max(0, exp - now) or 0
+    for _, WA in ipairs(frameworks) do
+        if WA and WA.GetTriggerStateForTrigger then
+            local allStates = WA.GetTriggerStateForTrigger(auraId, triggernum)
+            if allStates then
+                if active then
+                    local now = GetTime and GetTime() or 0
+                    local rem = (exp and exp > 0) and math.max(0, exp - now) or 0
 
-        allStates[""] = {
-            show = true,
-            changed = true,
-            progressType = "timed",
-            duration = dur or 0,
-            expirationTime = exp or 0,
-            total = dur or 0,
-            remaining = rem,
-            icon = icon or 136243,
-            stacks = stacks or 0,
-            applications = stacks or 0,
-            charges = stacks or 0,
-            value = stacks or 0,
-            spellId = matchedID,
-            name = name or ("Spell " .. (matchedID or 0)),
-        }
-    else
-        allStates[""] = {
-            show = false,
-            changed = true,
-        }
-    end
+                    allStates[""] = {
+                        show = true,
+                        changed = true,
+                        progressType = "timed",
+                        duration = dur or 0,
+                        expirationTime = exp or 0,
+                        total = dur or 0,
+                        remaining = rem,
+                        icon = icon or 136243,
+                        stacks = stacks or 0,
+                        applications = stacks or 0,
+                        charges = stacks or 0,
+                        value = stacks or 0,
+                        spellId = matchedID,
+                        name = name or ("Spell " .. (matchedID or 0)),
+                    }
+                else
+                    allStates[""] = {
+                        show = false,
+                        changed = true,
+                    }
+                end
 
-    if WA.UpdatedTriggerState then
-        WA.UpdatedTriggerState(auraId)
+                if WA.UpdatedTriggerState then
+                    WA.UpdatedTriggerState(auraId)
+                end
+            end
+        end
     end
 end
 
 function Injection.Initialize()
-    local WA = GetAuraFramework()
-    if not WA then return false end
+    local frameworks = GetAuraFrameworks()
+    if #frameworks == 0 then return false end
 
     -- Hook Buff trigger options in OptionsPrivate / Options globals
-    local optPrivate = _G.OptionsPrivate or (WA and WA.OptionsPrivate)
-    if optPrivate and optPrivate.GetBuffTriggerOptions then
+    local optPrivate = _G.OptionsPrivate
+    if optPrivate and optPrivate.GetBuffTriggerOptions and not optPrivate._cvWrapped then
         optPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(optPrivate.GetBuffTriggerOptions)
+        optPrivate._cvWrapped = true
     end
 
-    -- Hook trigger system registration
-    if WA.RegisterTriggerSystemOptions and not isInitialized then
-        local orig_Register = WA.RegisterTriggerSystemOptions
-        WA.RegisterTriggerSystemOptions = function(systemTypes, optionsFunc)
-            for _, sysType in ipairs(systemTypes) do
-                if sysType == "aura2" then
-                    optionsFunc = Injection.WrapBuffTriggerOptions(optionsFunc)
+    -- Hook trigger system registration on every available framework
+    for _, WA in ipairs(frameworks) do
+        if WA.RegisterTriggerSystemOptions and not WA._cvRegisterHooked then
+            local orig_Register = WA.RegisterTriggerSystemOptions
+            WA.RegisterTriggerSystemOptions = function(systemTypes, optionsFunc)
+                for _, sysType in ipairs(systemTypes) do
+                    if sysType == "aura2" then
+                        optionsFunc = Injection.WrapBuffTriggerOptions(optionsFunc)
+                    end
                 end
+                return orig_Register(systemTypes, optionsFunc)
             end
-            return orig_Register(systemTypes, optionsFunc)
+            WA._cvRegisterHooked = true
         end
-        isInitialized = true
+
+        if WA.OptionsPrivate and WA.OptionsPrivate.GetBuffTriggerOptions and not WA.OptionsPrivate._cvWrapped then
+            WA.OptionsPrivate.GetBuffTriggerOptions = Injection.WrapBuffTriggerOptions(WA.OptionsPrivate.GetBuffTriggerOptions)
+            WA.OptionsPrivate._cvWrapped = true
+        end
     end
 
     return true

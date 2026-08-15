@@ -147,3 +147,76 @@ Harness.RunTest("5. SyncAuraState pushes rich Cooldown Viewer state (stacks, dur
     -- Clean up
     _G.BuffIconCooldownViewer.itemFramePool._icons = {}
 end)
+
+Harness.RunTest("6. Injection hooks M33kAuras.RegisterTriggerSystemOptions directly", function()
+    -- Clear previous options in M33kAuras
+    _G.M33kAuras._registeredOptions = {}
+
+    -- Force re-initialization with M33kAuras
+    local M33K = {}
+    Harness.LoadFullAddon(M33K)
+    M33K.Injection.Initialize()
+
+    -- Simulate M33kAuras registering aura2 options
+    local capturedOptions = nil
+    local mockOptionsGenerator = function(data, triggernum)
+        return {
+            ["trigger." .. triggernum .. ".aura_options"] = {
+                existingOpt = { type = "toggle", name = "Existing" },
+            }
+        }
+    end
+
+    _G.M33kAuras.RegisterTriggerSystemOptions({ "aura2" }, mockOptionsGenerator)
+
+    Harness.Assert(#_G.M33kAuras._registeredOptions > 0, "Options should be registered in M33kAuras")
+
+    -- Call the registered wrapper and verify injection
+    local regWrapper = _G.M33kAuras._registeredOptions[1].fn
+    local dummyData = {
+        id = "M33kTestAura",
+        triggers = {
+            [1] = {
+                trigger = { type = "aura2", unit = "player" }
+            }
+        }
+    }
+    local result = regWrapper(dummyData, 1)
+    local aura_opts = result["trigger.1.aura_options"]
+
+    Harness.Assert(aura_opts.cvHeader ~= nil, "M33kAuras: cvHeader should be injected")
+    Harness.Assert(aura_opts.useCooldownViewer ~= nil, "M33kAuras: useCooldownViewer should be injected")
+    Harness.Assert(aura_opts.cvPickerBuffsAndBars ~= nil, "M33kAuras: cvPickerBuffsAndBars should be injected")
+    Harness.Assert(aura_opts.cvPickerCooldowns ~= nil, "M33kAuras: cvPickerCooldowns should be injected")
+end)
+
+Harness.RunTest("7. SyncAuraState pushes state into M33kAuras environment when ThisWeeksAuras is absent", function()
+    local savedTWA = _G.ThisWeeksAuras
+    _G.ThisWeeksAuras = nil  -- simulate only M33kAuras running
+
+    local auraId = "SoloM33kAura"
+    local triggernum = 1
+
+    local mockIcon = {
+        spellID = 188370,
+        cooldownUseAuraDisplayTime = true,
+        cooldownExpirationTime = 1020.0,
+        cooldownDuration = 20.0,
+        ChargeCount = { Current = 1 },
+        IsShown = function() return true end,
+    }
+    _G.BuffIconCooldownViewer.itemFramePool._icons = { mockIcon }
+
+    M33K.Injection.SyncAuraState(auraId, triggernum, { [188370] = true })
+
+    local state = _G.M33kAuras.GetTriggerStateForTrigger(auraId, triggernum)[""]
+    Harness.Assert(state ~= nil, "State should be populated in M33kAuras")
+    Harness.AssertEquals(state.show, true, "State show should be true in M33kAuras")
+    Harness.AssertEquals(state.expirationTime, 1020.0, "Expiration time matches in M33kAuras")
+    Harness.AssertEquals(state.charges, 1, "Charges count matches in M33kAuras")
+    Harness.AssertEquals(state.spellId, 188370, "Spell ID matches in M33kAuras")
+
+    -- Clean up & restore
+    _G.BuffIconCooldownViewer.itemFramePool._icons = {}
+    _G.ThisWeeksAuras = savedTWA
+end)
